@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>3D Billiard</title>
+  <link rel="stylesheet" href="/src/design-system.css">
+  <link rel="stylesheet" href="/src/game.css">
+</head>
+<body>
+  <header>
+    <div>
+      <strong>3D Billiard</strong>
+      <small id="score"></small><small id="status" role="status">Tap or drag on the table to aim.</small>
+    </div>
+    <nav aria-label="Table controls">
+      <button class="ui-button" id="viewMode" type="button" aria-pressed="false">View off</button>
+      <button class="ui-button" id="camera" type="button">Overhead</button>
+      <button class="ui-button" id="reset" type="button">Re-rack</button>
+      <button class="ui-button" id="openSettings" type="button">Settings</button>
+    </nav>
+  </header>
+  <main><canvas id="table" aria-label="3D pool table"></canvas></main>
+  <footer aria-label="Shot controls">
+    <div class="contact">
+      <span class="control-label">Spin</span>
+      <button class="ui-button" id="tip" aria-label="Cue ball contact point. Use arrow keys to adjust or Home to center." type="button"><span id="tipMark"></span></button>
+    </div>
+    <div class="power">
+      <div class="power-label"><span class="control-label">Cue power</span><button class="ui-button" id="placeBall" type="button" aria-pressed="false">Move cue ball</button><output id="powerValue">0%</output></div>
+      <button class="ui-button" id="stroke" type="button" aria-label="Pull the cue left and release to shoot" aria-describedby="strokeHint">
+        <span class="cue-track" aria-hidden="true"><span class="cue-stick"></span><span class="cue-target"></span></span>
+        <span class="power-track" aria-hidden="true"><span></span></span>
+      </button>
+      <small id="strokeHint">Pull left and release to shoot</small>
+    </div>
+  </footer>
+  <dialog class="ui-dialog" id="settings" aria-labelledby="settingsTitle">
+  <form method="dialog">
+    <h2 id="settingsTitle">Game setup</h2>
+    <p>Choose a game and make the table your own.</p>
+    <label class="ui-field"><span>Game</span><span class="ui-select-wrap"><select class="ui-select" id="game"><option value="pool">Pool · Straight potting</option><option value="snooker">Snooker</option></select></span></label>
+    <label class="ui-field"><span>Play</span><span class="ui-select-wrap"><select class="ui-select" id="opponent"><option value="solo">Solo practice</option><option value="computer">Against computer</option></select></span></label>
+    <label class="ui-field"><span>Difficulty</span><span class="ui-select-wrap"><select class="ui-select" id="difficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></span></label>
+    <label class="ui-field"><span>Cue</span><span class="ui-select-wrap"><select class="ui-select" id="cueStyle"><option>Classic Maple</option><option>Rosewood</option><option>Carbon Black</option></select></span></label>
+    <label class="ui-field"><span>Table</span><span class="ui-select-wrap"><select class="ui-select" id="tableStyle"><option>Club Green</option><option>Tournament Blue</option><option>Burgundy Lounge</option></select></span></label>
+    <label class="ui-field"><span>Theme</span><span class="ui-select-wrap"><select class="ui-select" id="theme"><option value="club">Clubhouse</option><option value="midnight">Midnight</option><option value="ivory">Ivory</option></select></span></label>
+    <label class="ui-field"><span>Graphics</span><span class="ui-select-wrap"><select class="ui-select" id="quality"><option>Low</option><option>Medium</option><option selected>High</option><option>Ultra</option></select></span></label>
+    <div class="ui-dialog-actions"><button class="ui-button" value="close">Done</button><button class="ui-button ui-button--primary" id="newMatch" value="start">Start new game</button></div>
+  </form>
+</dialog>
+<script type="module" src="/src/theme.ts"></script>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
+
+
+
+

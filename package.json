@@ -1,0 +1,1 @@
+{"name":"3d-billiard","private":true,"type":"module","scripts":{"dev":"vite","build":"tsc --noEmit && vite build"},"dependencies":{"@babylonjs/core":"^8.0.0"},"devDependencies":{"typescript":"^5.8.0","vite":"^6.0.0"}}
