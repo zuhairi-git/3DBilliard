@@ -10,7 +10,7 @@
 <body>
   <header>
     <div>
-      <strong>3D Billiard</strong>
+      <span class="eyebrow">THE BILLIARD ROOM</span><strong>Take your shot.</strong>
       <small id="score"></small><small id="status" role="status">Tap or drag on the table to aim.</small>
     </div>
     <nav aria-label="Table controls">
@@ -23,11 +23,11 @@
   <main><canvas id="table" aria-label="3D pool table"></canvas></main>
   <footer aria-label="Shot controls">
     <div class="contact">
-      <span class="control-label">Spin</span>
+      <span class="control-label">01 · Spin</span>
       <button class="ui-button" id="tip" aria-label="Cue ball contact point. Use arrow keys to adjust or Home to center." type="button"><span id="tipMark"></span></button>
     </div>
     <div class="power">
-      <div class="power-label"><span class="control-label">Cue power</span><button class="ui-button" id="placeBall" type="button" aria-pressed="false">Move cue ball</button><output id="powerValue">0%</output></div>
+      <div class="power-label"><span class="control-label">02 · Pull &amp; release</span><output id="powerValue">0%</output></div>
       <button class="ui-button" id="stroke" type="button" aria-label="Pull the cue left and release to shoot" aria-describedby="strokeHint">
         <span class="cue-track" aria-hidden="true"><span class="cue-stick"></span><span class="cue-target"></span></span>
         <span class="power-track" aria-hidden="true"><span></span></span>
@@ -37,15 +37,21 @@
   </footer>
   <dialog class="ui-dialog" id="settings" aria-labelledby="settingsTitle">
   <form method="dialog">
-    <h2 id="settingsTitle">Game setup</h2>
-    <p>Choose a game and make the table your own.</p>
+    <div class="settings-heading"><span class="eyebrow">MAKE IT YOURS</span><h2 id="settingsTitle">Your room, your game.</h2></div>
+    <p>Set the pace, choose your finish, and settle in.</p><fieldset><legend>Play</legend>
     <label class="ui-field"><span>Game</span><span class="ui-select-wrap"><select class="ui-select" id="game"><option value="pool">Pool · Straight potting</option><option value="snooker">Snooker</option></select></span></label>
     <label class="ui-field"><span>Play</span><span class="ui-select-wrap"><select class="ui-select" id="opponent"><option value="solo">Solo practice</option><option value="computer">Against computer</option></select></span></label>
     <label class="ui-field"><span>Difficulty</span><span class="ui-select-wrap"><select class="ui-select" id="difficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></span></label>
+    </fieldset><fieldset><legend>Room &amp; equipment</legend>
     <label class="ui-field"><span>Cue</span><span class="ui-select-wrap"><select class="ui-select" id="cueStyle"><option>Classic Maple</option><option>Rosewood</option><option>Carbon Black</option></select></span></label>
     <label class="ui-field"><span>Table</span><span class="ui-select-wrap"><select class="ui-select" id="tableStyle"><option>Club Green</option><option>Tournament Blue</option><option>Burgundy Lounge</option></select></span></label>
     <label class="ui-field"><span>Theme</span><span class="ui-select-wrap"><select class="ui-select" id="theme"><option value="club">Clubhouse</option><option value="midnight">Midnight</option><option value="ivory">Ivory</option></select></span></label>
     <label class="ui-field"><span>Graphics</span><span class="ui-select-wrap"><select class="ui-select" id="quality"><option>Low</option><option>Medium</option><option selected>High</option><option>Ultra</option></select></span></label>
+    </fieldset><fieldset><legend>Sound</legend>
+      <div class="sound-row"><div><strong>Ball &amp; pocket sounds</strong><small>Soft clicks and pocket drops</small></div><button class="ui-button" id="soundToggle" type="button" aria-pressed="true">Sound on</button></div>
+      <label class="volume-row" for="volume"><span>Volume</span><input id="volume" type="range" min="0" max="100" value="45"><output id="volumeLabel" for="volume">45%</output></label>
+    </fieldset>
+    <p class="settings-note">Game and opponent changes apply when you start a new game.</p>
     <div class="ui-dialog-actions"><button class="ui-button" value="close">Done</button><button class="ui-button ui-button--primary" id="newMatch" value="start">Start new game</button></div>
   </form>
 </dialog>
@@ -53,6 +59,8 @@
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
+
+
 
 
 

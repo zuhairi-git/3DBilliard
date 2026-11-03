@@ -96,6 +96,11 @@
 @supports (appearance: base-select) and selector(::picker(select)) {
   @media (pointer: fine) {
     .ui-select, .ui-select::picker(select) { appearance: base-select; }
+    .ui-select {
+      display: inline-flex;
+      align-items: center;
+      line-height: 1.4;
+    }
     .ui-select::picker-icon { display: none; }
     .ui-select::picker(select) {
       margin-block: var(--space-1);

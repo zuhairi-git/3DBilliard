@@ -104,6 +104,55 @@ footer {
   nav > * { padding-inline: 5px; font-size: .85rem; }
 }
 
-#placeBall { font-size: .8rem; }
 #score { color: var(--accent); }
 
+
+header {
+  padding-block: 14px;
+  background: linear-gradient(110deg, var(--panel), var(--surface));
+  box-shadow: 0 6px 22px #00000018;
+}
+header > div { display: grid; gap: 3px; }
+header strong { font-family: Georgia, serif; font-size: 1.35rem; font-weight: 500; }
+.eyebrow { display: block; color: var(--accent); font-size: .64rem; letter-spacing: .18em; font-weight: 700; }
+nav { padding: 5px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+nav .ui-button { border-color: transparent; background-color: transparent; }
+#openSettings { border-color: var(--border); background: var(--control); }
+footer { gap: 24px; padding-block: 14px; background: linear-gradient(0deg, var(--panel), var(--surface)); }
+.contact { padding-inline-end: 24px; border-inline-end: 1px solid var(--border); gap: 8px; }
+.power { width: min(100%, 500px); }
+.power-label { margin-bottom: 8px; }
+#powerValue { font-size: 1.1rem; }
+#stroke { min-height: 58px; padding: 10px 16px; border-radius: 12px; }
+#strokeHint { font-size: .75rem; margin-top: 6px; }
+.ui-dialog { width: min(530px, calc(100% - 24px)); padding: 24px; box-shadow: 0 24px 80px #00000060; }
+.settings-heading { display: grid; gap: 8px; }
+.settings-heading h2 { font: 1.65rem Georgia, serif; }
+.ui-dialog form { gap: 16px; }
+.ui-dialog fieldset { min-width: 0; margin: 0; border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.ui-dialog legend { padding: 0 8px; font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+.sound-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sound-row strong { font-size: .85rem; }
+.sound-row small { margin-top: 4px; font-size: .75rem; }
+.volume-row { display: flex; align-items: center; gap: 12px; font-size: .85rem; }
+.volume-row input { min-width: 0; flex: 1; min-height: 44px; accent-color: var(--accent); }
+.volume-row output { width: 3em; text-align: end; font-variant-numeric: tabular-nums; }
+.settings-note { font-size: .75rem; }
+.ui-dialog-actions { position: sticky; bottom: -24px; padding-block: 12px; background: var(--panel); }
+@media (max-width: 560px) {
+  header { padding-block: 8px; }
+  header strong { font-size: 1rem; }
+  header .eyebrow { display: none; }
+  footer { gap: 12px; padding-block: 10px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+  .contact { padding-inline-end: 12px; }
+  .ui-dialog { padding: 16px; }
+  .ui-dialog-actions { bottom: -16px; }
+  .ui-field { grid-template-columns: 4.2rem minmax(0, 1fr); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  header, footer { padding-block: 4px; }
+  header .eyebrow, #strokeHint { display: none; }
+  header strong { font-size: 1rem; }
+  #stroke { min-height: 44px; }
+  .power-label { margin-bottom: 0; }
+}

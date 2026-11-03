@@ -32,12 +32,13 @@ export function rack(snooker = false): Ball[] {
   return balls;
 }
 
-export function step(balls: Ball[], dt: number) {
+export function step(balls: Ball[], dt: number, sound?: (kind: 'ball' | 'pocket', strength: number) => void) {
   for (const ball of balls) {
     if (ball.pocketed) continue;
     ball.x += ball.vx * dt;
     ball.z += ball.vz * dt;
     if (pockets.some(p => Math.hypot(p.x - ball.x, p.z - ball.z) < 0.067)) {
+      sound?.('pocket', Math.max(0.6, Math.hypot(ball.vx, ball.vz)));
       ball.pocketed = true;
       ball.vx = ball.vz = ball.spinX = ball.spinZ = ball.sideSpin = 0;
       continue;
@@ -84,6 +85,7 @@ export function step(balls: Ball[], dt: number) {
       const closing = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
       if (closing <= 0) continue;
       if (i === 0) firstContact ??= j;
+      sound?.('ball', closing);
       const impulse = closing * 0.97;
       a.vx -= impulse * nx;
       a.vz -= impulse * nz;
@@ -93,4 +95,5 @@ export function step(balls: Ball[], dt: number) {
   }
   return firstContact;
 }
+
 
