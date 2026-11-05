@@ -460,7 +460,7 @@ const ballMeshes = rack(true).map((_, index) => {
   return mesh;
 });
 const poolFinishes = ballMeshes.map(mesh => mesh.material);
-const redFinish = material("snooker red", "#ae272d", 0.95);
+const redFinish = material("snooker red", "#ef3348", 0.95);
 const colourFinishes = ["#e5bb25", "#26754d", "#754735", "#275d9e", "#e885a3", "#18191c"]
   .map((hex, index) => material("snooker colour " + index, hex, 0.95));
 
@@ -492,6 +492,25 @@ const settings = document.querySelector<HTMLDialogElement>('#settings')!;
 const select = (id: string) => document.querySelector<HTMLSelectElement>('#' + id)!;
 const score = document.querySelector<HTMLElement>('#score')!;
 let snooker = false;
+const hudToggle = document.querySelector<HTMLButtonElement>('#toggleHud')!;
+document.body.classList.add('compact-hud');
+hudToggle.onclick = () => {
+  const compact = document.body.classList.toggle('compact-hud');
+  hudToggle.setAttribute('aria-expanded', String(!compact));
+  hudToggle.setAttribute('aria-label', compact ? 'Expand game details' : 'Collapse game details');
+  hudToggle.innerHTML = compact ? '⌃<span>Details</span>' : '⌄<span>Hide</span>';
+  requestAnimationFrame(fitOverheadCamera);
+};
+const baulkPoints = [new Vector3(-width / 2, 0.002, -0.74), new Vector3(width / 2, 0.002, -0.74)];
+const dPoints = Array.from({ length: 65 }, (_, i) => {
+  const a = i * Math.PI / 64;
+  return new Vector3(Math.cos(a) * 0.22, 0.002, -0.74 - Math.sin(a) * 0.22);
+});
+const snookerLines = MeshBuilder.CreateLineSystem('snooker baulk and D', { lines: [baulkPoints, dPoints] }, scene);
+snookerLines.color = Color3.FromHexString('#e7b5b0');
+snookerLines.alpha = 0.55;
+snookerLines.isPickable = false;
+snookerLines.setEnabled(false);
 let versusComputer = false;
 const online = new OnlineGame();
 let onlineMode = false;
@@ -526,9 +545,56 @@ function legalTargets() {
   return reds.length ? reds : colours.slice(0, 1);
 }
 
+const playerDetails = document.querySelector<HTMLDialogElement>('#playerDetails')!;
+let detailsSeat = 0;
+document.getElementById('closePlayerDetails')!.onclick = () => playerDetails.close();
+function renderPlayerDetails() {
+  document.getElementById('playerDetailsTitle')!.textContent = playerName(detailsSeat);
+  const current = finished ? winner === detailsSeat ? 'Winner' : 'Game finished' : turn === detailsSeat ? 'At the table now' : 'Waiting for their turn';
+  const group = groups[detailsSeat];
+  document.getElementById('playerDetailsSummary')!.textContent = current + ' · ' + (snooker ? 'Score: ' + scores[detailsSeat] + '. Balls below are shared table totals.' : group ? group + ' group' : 'Open table · Groups unassigned. Showing all object balls.');
+  const container = document.getElementById('playerDetailsBalls')!;
+  container.replaceChildren();
+  const indices = balls.flatMap((_, i) => i > 0 && (snooker || !group || groupOf(i) === group) ? [i] : []);
+  for (const potted of [true, false]) {
+    const numbers = indices.filter(i => balls[i].pocketed === potted);
+    const section = document.createElement('section');
+    section.className = 'player-ball-section';
+    const heading = document.createElement('h3');
+    heading.textContent = (potted ? 'Balls in' : 'Remaining') + ' · ' + numbers.length;
+    const tray = document.createElement('div');
+    tray.className = 'player-detail-tray';
+    for (const i of numbers) {
+      const badge = document.createElement('span');
+      badge.className = 'score-ball' + (!snooker && i > 8 ? ' stripe' : '');
+      const label = snooker ? i <= 15 ? 'Red' : colourNames[i - 16] : 'Ball ' + i;
+      badge.title = label;
+      badge.setAttribute('aria-label', label);
+      badge.style.setProperty('--ball-color', snooker ? i <= 15 ? '#ef3348' : ['#e5bb25', '#26754d', '#754735', '#275d9e', '#e885a3', '#18191c'][i - 16] : palette[(i - 1) % 8]);
+      if (!snooker) {
+        const number = document.createElement('span');
+        number.className = 'ball-number'; number.textContent = String(i); badge.append(number);
+      }
+      tray.append(badge);
+    }
+    if (!numbers.length) { const empty = document.createElement('small'); empty.textContent = potted ? 'No balls pocketed yet' : 'All cleared'; tray.append(empty); }
+    section.append(heading, tray); container.append(section);
+  }
+  if (!snooker && group) {
+    const eight = document.createElement('p');
+    eight.textContent = balls[8].pocketed ? 'Black 8 · Pocketed' : 'Black 8 · ' + (indices.every(i => balls[i].pocketed) ? 'Clear to play — call a pocket' : 'Clear your group first');
+    container.append(eight);
+  }
+}
 function showScore() {
+  if (playerDetails.open) renderPlayerDetails();
   score.replaceChildren(...[0, 1].map(seat => {
-    const item = document.createElement('span');
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.setAttribute('aria-haspopup', 'dialog');
+    item.setAttribute('aria-controls', 'playerDetails');
+    item.setAttribute('aria-label', playerName(seat) + ', view player details');
+    item.onclick = () => { detailsSeat = seat; renderPlayerDetails(); playerDetails.showModal(); };
     item.className = 'player-score' + (turn === seat && !finished ? ' active' : '');
     if (turn === seat) item.setAttribute('aria-current', 'true');
     const marker = document.createElement('span');
@@ -565,6 +631,13 @@ function showScore() {
       tray.textContent = snooker ? 'Snooker' : 'Groups unassigned';
     }
     item.append(marker, name, detail, tray);
+    if (turn === seat && !finished) {
+      const turnBadge = document.createElement('span');
+      turnBadge.className = 'player-turn';
+      turnBadge.textContent = 'Playing';
+      turnBadge.setAttribute('aria-label', 'Current player');
+      item.append(turnBadge);
+    }
     return item;
   }));
 }
@@ -674,6 +747,15 @@ const spinDialog = document.querySelector<HTMLDialogElement>('#spinDialog')!;
 const spinBall = document.querySelector<HTMLButtonElement>('#spinBall')!;
 const spinMark = document.querySelector<HTMLElement>('#spinMark')!;
 const spinValue = document.querySelector<HTMLOutputElement>('#spinValue')!;
+const autoResetSpin = document.querySelector<HTMLButtonElement>('#autoResetSpin')!;
+let resetSpinAfterShot = false;
+try { resetSpinAfterShot = localStorage.getItem('billiard-reset-spin') === 'on'; } catch {}
+autoResetSpin.setAttribute('aria-checked', String(resetSpinAfterShot));
+autoResetSpin.onclick = () => {
+  resetSpinAfterShot = !resetSpinAfterShot;
+  autoResetSpin.setAttribute('aria-checked', String(resetSpinAfterShot));
+  try { localStorage.setItem('billiard-reset-spin', resetSpinAfterShot ? 'on' : 'off'); } catch {}
+};
 const stroke = document.querySelector<HTMLButtonElement>("#stroke")!;
 const powerValue = document.querySelector<HTMLOutputElement>("#powerValue")!;
 function showPull() {
@@ -1005,6 +1087,7 @@ document.querySelector<HTMLButtonElement>('#camera')!.onclick = event => {
   button.setAttribute('aria-label', overhead ? 'Switch to perspective view' : 'Switch to top-down view');
 };
 function resetMatch() {
+  applyTableFinish();
   tvContext = '';
   balls = rack(snooker);
   turn = 0;
@@ -1113,12 +1196,16 @@ select('cueStyle').onchange = () => {
   stroke.style.setProperty('--cue-shaft', shaft);
   stroke.style.setProperty('--cue-butt', butt);
 };
-select('tableStyle').onchange = () => {
-  const [felt, cushion, rail] = tableStyles[select('tableStyle').value];
+function applyTableFinish() {
+  const [felt, cushion, rail] = snooker ? ['#851e39', '#4d142c', '#211a29'] : tableStyles[select('tableStyle').value];
+  document.body.classList.toggle('snooker-game', snooker);
+  snookerLines.setEnabled(snooker);
   cloth.diffuseColor = Color3.FromHexString(felt);
   rubber.diffuseColor = Color3.FromHexString(cushion);
   wood.diffuseColor = Color3.FromHexString(rail);
-};
+  requestAnimationFrame(fitOverheadCamera);
+}
+select('tableStyle').onchange = applyTableFinish;
 function gameState(): SavedGame {
   return { version: 1, balls, snooker, versusComputer, onlineMode, turn, scores, groups, winner, breaking, shotWasBreak,
     colourAfterRed, finished, firstContact, shotTargets, previouslyPocketed, rolling, placement, aim: [aim.x, aim.z],
@@ -1126,7 +1213,9 @@ function gameState(): SavedGame {
 }
 function applyGame(s: SavedGame, preserveLocalAim = false) {
   balls = s.balls.map(ball => ({ ...ball }));
+  const gameChanged = snooker !== s.snooker;
   snooker = s.snooker;
+  if (gameChanged) applyTableFinish();
   versusComputer = s.versusComputer;
   turn = s.turn;
   scores = [...s.scores];
@@ -1248,7 +1337,7 @@ function fitOverheadCamera() {
   const landscape = (uses2dTable() || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
   document.documentElement.style.setProperty('--shot-controls-height', bounds.bottom - footer.top + 'px');
-  const zoomTop = mobileLayout.matches && !uses2dTable() ? document.querySelector('.camera-zoom')!.getBoundingClientRect().top : footer.top;
+  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && !uses2dTable() ? document.querySelector('.camera-zoom')!.getBoundingClientRect().top : footer.top;
   const bottom = Math.min(footer.top, zoomTop) - bounds.top - 6;
   const availableHeight = Math.max(1, bottom - top);
   const availableWidth = Math.max(1, bounds.width - 16);
@@ -1510,6 +1599,7 @@ engine.runRenderLoop(() => {
     if (!strike) {
       const speed = shotSpeed(shotPower);
       strikeBall(cueBall, aim.x, aim.z, speed, tipX, tipY);
+      if (resetSpinAfterShot) setTip(0, 0);
       rolling = true;
       status.textContent = 'Balls in motion';
     }

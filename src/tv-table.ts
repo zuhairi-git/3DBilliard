@@ -90,7 +90,7 @@ export class TvTable {
       'Tournament Blue': ['#258bd0', '#125283', '#182b43'],
       'Burgundy Lounge': ['#b44876', '#742c54', '#30233c'],
     };
-    const [felt, cushion, wood] = finishes[state.tableStyle] ?? finishes['Tournament Blue'];
+    const [felt, cushion, wood] = state.snooker ? ['#851e39', '#4d142c', '#211a29'] : finishes[state.tableStyle] ?? finishes['Tournament Blue'];
     rectangle(width + 0.30, length + 0.30, '#0a100d');
     rectangle(width + 0.27, length + 0.27, '#63ddf1');
     rectangle(width + 0.25, length + 0.25, wood);
@@ -102,7 +102,12 @@ export class TvTable {
       for (const x of [-0.31, 0, 0.31]) circle(x, side * (length / 2 + 0.078), 0.006, '#e8dfc9');
     }
     ctx.globalAlpha = 0.3;
-    line(-width / 2, -length / 4, width / 2, -length / 4, '#e8dfc9', 0.003);
+    const baulk = state.snooker ? -0.74 : -length / 4;
+    line(-width / 2, baulk, width / 2, baulk, '#e8dfc9', 0.003);
+    if (state.snooker) for (let i = 0; i < 64; i++) {
+      const a = i * Math.PI / 64, b = (i + 1) * Math.PI / 64;
+      line(Math.cos(a) * 0.22, baulk - Math.sin(a) * 0.22, Math.cos(b) * 0.22, baulk - Math.sin(b) * 0.22, '#e8dfc9', 0.003);
+    }
     ctx.globalAlpha = 1;
     for (let i = 0; i < pockets.length; i++) {
       const p = pockets[i];

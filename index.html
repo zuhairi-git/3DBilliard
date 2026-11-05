@@ -64,6 +64,7 @@
     <button class="zoom-button zoom-value" id="zoomFit" type="button" aria-label="Reset zoom to fit the table" title="Fit table">1.0×</button>
   </aside>
   <footer class="game-hud" aria-label="Shot controls">
+    <button class="ui-button hud-toggle" id="toggleHud" type="button" aria-expanded="false" aria-controls="score" title="Expand game details">⌃<span>Details</span></button>
     <div id="tvControls" hidden>
       <div><strong id="tvStep">Aim your shot</strong><span id="tvHelp">← → Aim · ↑ ↓ Fine aim · OK Set power · Back Menu</span></div>
       <output id="tvPower" aria-label="Remote shot power">50%</output>
@@ -85,12 +86,17 @@
       <small id="strokeHint">Pull left and release to shoot</small>
     </div>
   </footer>
+  <dialog class="ui-dialog" id="playerDetails" aria-labelledby="playerDetailsTitle">
+    <div class="dialog-body"><div class="spin-heading"><div class="settings-heading"><span class="eyebrow">PLAYER DETAILS</span><h2 id="playerDetailsTitle"></h2></div><button class="ui-button" id="closePlayerDetails" type="button" aria-label="Close player details" autofocus>×</button></div><p id="playerDetailsSummary"></p><div id="playerDetailsBalls"></div></div>
+    <div class="ui-dialog-actions"><form method="dialog"><button class="ui-button ui-button--primary">Back to game</button></form></div>
+  </dialog>
   <dialog class="ui-dialog spin-dialog" id="spinDialog" aria-labelledby="spinTitle" aria-describedby="spinHelp">
     <div class="dialog-body">
       <div class="spin-heading"><div class="settings-heading"><span class="eyebrow">CUE BALL CONTROL</span><h2 id="spinTitle">Set your spin</h2></div><button class="ui-button" id="closeSpin" type="button" aria-label="Close spin adjustment">×</button></div>
       <p id="spinHelp">Tap or drag on the ball to choose your contact point.</p>
       <div class="spin-surface"><span class="spin-direction spin-top">FOLLOW</span><span class="spin-direction spin-bottom">DRAW</span><span class="spin-direction spin-left">LEFT</span><span class="spin-direction spin-right">RIGHT</span><button id="spinBall" type="button" aria-label="Spin contact point. Arrow keys adjust; Home resets to center." autofocus><span class="spin-crosshair" aria-hidden="true"></span><span id="spinMark"></span></button></div>
       <output id="spinValue" aria-live="polite">Center ball · No spin</output>
+      <div class="spin-reset-option"><div><strong id="autoResetSpinLabel">Reset spin after each shot</strong><small>Return the contact point to center after striking.</small></div><button id="autoResetSpin" class="spin-switch" type="button" role="switch" aria-checked="false" aria-labelledby="autoResetSpinLabel"><span></span></button></div>
     </div>
     <div class="ui-dialog-actions"><button class="ui-button" id="resetSpin" type="button">Reset spin</button><button class="ui-button ui-button--primary" id="applySpin" type="button">Done</button></div>
   </dialog>
