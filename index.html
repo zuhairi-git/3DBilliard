@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>3D Billiard</title>
+  <title>Billiard · Pool &amp; Snooker</title>
+  <link rel="icon" type="image/svg+xml" href="/billiard-mark.svg">
   <link rel="stylesheet" href="/src/design-system.css">
   <link rel="stylesheet" href="/src/game.css">
   <link rel="stylesheet" href="/src/hud.css">
@@ -11,7 +12,7 @@
 <body>
   <header class="game-hud">
     <div class="game-heading">
-      <strong><span class="brand-ball" aria-hidden="true">8</span>Billiard</strong>
+      <strong class="game-brand"><img src="/billiard-logo.svg" width="270" height="64" alt="Billiard · Pool and Snooker"></strong>
       <span id="shotClock" role="timer" aria-label="Online shot time remaining" hidden>30s</span>
       <small id="status" role="status">Tap or drag on the table to aim.</small>
     </div>
@@ -30,7 +31,7 @@
   <dialog id="mobileGameMenu" class="ui-dialog game-menu" aria-labelledby="gameMenuTitle">
     <div class="dialog-body">
     <div class="game-menu-heading">
-      <div class="settings-heading"><span class="eyebrow">AT THE TABLE</span><h2 id="gameMenuTitle">Game menu</h2></div>
+      <div class="settings-heading"><img class="menu-brand" src="/billiard-logo.svg" width="270" height="64" alt="Billiard · Pool and Snooker"><h2 id="gameMenuTitle">Game menu</h2></div>
       <button class="ui-button game-menu-close" id="closeGameMenu" type="button" aria-label="Close game menu" autofocus><span aria-hidden="true">×</span></button>
     </div>
     <div id="gameMenuActions"></div>
