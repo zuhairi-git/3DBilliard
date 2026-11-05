@@ -7,6 +7,11 @@ A static file host alone does not support online games.
 
 ## Play
 
+The default overhead table uses SVG artwork for the table, cushions, cue, and
+balls. The scoreboard and player details share the same SVG ball artwork.
+Choose **3D view** or **Orbit** to use the Babylon scene. TV mode retains its
+lightweight Canvas 2D renderer. All views use the same physics and match state.
+
 - On a keyboard, **Left/Right** rotate aim by one degree. Hold **Shift** or use
   **Up/Down** for one-tenth-degree adjustments. Unlock aim before adjusting;
   shortcuts pause while a dialog is open, a shot is moving, or you are typing.

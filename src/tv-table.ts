@@ -9,7 +9,7 @@ export function tvViewport(screenWidth: number, screenHeight: number, top: numbe
   return { landscape, scale, cx: screenWidth / 2, cy: (top + bottom) / 2 };
 }
 
-interface TableState {
+export interface TableState {
   balls: Ball[];
   aim: { x: number; z: number };
   rolling: boolean;

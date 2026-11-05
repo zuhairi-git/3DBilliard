@@ -1,5 +1,7 @@
+import { ballBadge } from './svg-ball';
 import { GameAudio } from './audio';
 import { RemoteShot, remoteKey, remotePlacement, type RemoteKey } from './tv-controls';
+import { SvgTable } from './svg-table';
 import { TvTable } from './tv-table';
 import { dismissDialog } from './tv-dialogs';
 import { installFullscreenControl } from './fullscreen';
@@ -19,7 +21,12 @@ import { cushions, cornerOpening, isMoving, length, pockets, rack, radius, shotS
 
 const canvas = document.querySelector<HTMLCanvasElement>('#table')!;
 const tvCanvas = document.querySelector<HTMLCanvasElement>('#tvTable')!;
-let tvTable: TvTable | undefined;
+const svgSurface = document.querySelector<SVGSVGElement>('#svgTable')!;
+let tvTable: TvTable | SvgTable | undefined;
+let overhead = true;
+let viewMode = false;
+let svgRenderer: SvgTable | undefined;
+let canvasRenderer: TvTable | undefined;
 const status = document.querySelector<HTMLElement>('#status')!;
 const quality = document.querySelector<HTMLSelectElement>('#quality')!;
 const mobileMenu = document.querySelector<HTMLButtonElement>('#mobileMenu')!;
@@ -176,7 +183,16 @@ const engine = (() => {
   }
 })();
 const headlessGraphics = engine instanceof NullEngine;
-function uses2dTable() { return tvEnabled || headlessGraphics; }
+function usesSvgTable() { return !tvEnabled && overhead && !viewMode; }
+function uses2dTable() { return tvEnabled || headlessGraphics || usesSvgTable(); }
+function syncTableSurface() {
+  const svg = usesSvgTable();
+  svgSurface.toggleAttribute('hidden', !svg);
+  tvCanvas.hidden = !uses2dTable();
+  canvas.hidden = uses2dTable();
+  if (svg) tvTable = svgRenderer ??= new SvgTable(svgSurface);
+  else if (uses2dTable()) tvTable = canvasRenderer ??= new TvTable(tvCanvas);
+}
 function activeTableCanvas() { return uses2dTable() ? tvCanvas : canvas; }
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.025, 0.045, 0.09, 1);
@@ -565,16 +581,10 @@ function renderPlayerDetails() {
     const tray = document.createElement('div');
     tray.className = 'player-detail-tray';
     for (const i of numbers) {
-      const badge = document.createElement('span');
-      badge.className = 'score-ball' + (!snooker && i > 8 ? ' stripe' : '');
+      const badge = ballBadge(i, snooker);
       const label = snooker ? i <= 15 ? 'Red' : colourNames[i - 16] : 'Ball ' + i;
       badge.title = label;
       badge.setAttribute('aria-label', label);
-      badge.style.setProperty('--ball-color', snooker ? i <= 15 ? '#ef3348' : ['#e5bb25', '#26754d', '#754735', '#275d9e', '#e885a3', '#18191c'][i - 16] : palette[(i - 1) % 8]);
-      if (!snooker) {
-        const number = document.createElement('span');
-        number.className = 'ball-number'; number.textContent = String(i); badge.append(number);
-      }
       tray.append(badge);
     }
     if (!numbers.length) { const empty = document.createElement('small'); empty.textContent = potted ? 'No balls pocketed yet' : 'All cleared'; tray.append(empty); }
@@ -600,6 +610,9 @@ function showScore() {
     const marker = document.createElement('span');
     marker.className = 'group-marker ' + (snooker || !groups[seat] ? 'open' : groups[seat]!.toLowerCase());
     marker.setAttribute('aria-hidden', 'true');
+    marker.classList.add('svg-group-marker');
+    const icon = ballBadge(snooker ? 1 : groups[seat] === 'Stripes' ? 9 : groups[seat] === 'Solids' ? 1 : 0, snooker);
+    marker.append(...icon.childNodes);
     const left = balls.filter((ball, index) => !ball.pocketed && groupOf(index) === groups[seat]).length;
     const name = document.createElement('strong');
     name.className = 'player-name';
@@ -613,15 +626,8 @@ function showScore() {
       const numbers = balls.flatMap((ball, index) => groupOf(index) === groups[seat] ? [{number: index, potted: ball.pocketed}] : []);
       numbers.sort((a, b) => Number(a.potted) - Number(b.potted) || a.number - b.number);
       for (const ball of numbers) {
-        const badge = document.createElement('span');
-        badge.className = 'score-ball ' + (ball.potted ? 'achieved' : 'pending') + (ball.number > 8 ? ' stripe' : '');
-        badge.style.setProperty('--ball-color', palette[(ball.number - 1) % 8]);
-        if (ball.number > 8) {
-          const number = document.createElement('span');
-          number.className = 'ball-number';
-          number.textContent = String(ball.number);
-          badge.append(number);
-        } else badge.textContent = String(ball.number);
+        const badge = ballBadge(ball.number);
+        badge.classList.add(ball.potted ? 'achieved' : 'pending');
         badge.title = 'Ball ' + ball.number + (ball.potted ? ' · pocketed' : ' · on table');
         badge.setAttribute('aria-label', badge.title);
         tray.append(badge);
@@ -712,7 +718,6 @@ function finishShot() {
 balls.forEach((ball, index) => ballMeshes[index].position.set(ball.x, radius, ball.z));
 let aim = new Vector3(0, 0, 1);
 let rolling = false;
-let overhead = true;
 let cameraTarget: number | undefined;
 let accumulator = 0;
 const fixedStep = 1 / 300;
@@ -867,7 +872,6 @@ let movingCueBall = false;
 let aimLocked = false;
 let lastCueTap = 0;
 let tableStroke: { x: number; y: number; dx: number; dy: number } | undefined;
-let viewMode = false;
 const viewToggle = document.querySelector<HTMLButtonElement>('#viewMode')!;
 const lockButton = document.querySelector<HTMLButtonElement>('#lockAim')!;
 const fineAim = document.querySelector<HTMLButtonElement>('#fineAim')!;
@@ -958,6 +962,7 @@ function showReadyStatus() {
 viewToggle.onclick = () => {
 
   viewMode = !viewMode;
+  syncTableSurface();
   viewToggle.querySelector<HTMLElement>('.hud-label')!.textContent = viewMode ? 'Orbit on' : 'Orbit';
   viewToggle.setAttribute('aria-pressed', String(viewMode));
   if (viewMode) {
@@ -1076,6 +1081,7 @@ for (const controlCanvas of [canvas, tvCanvas]) {
 
 document.querySelector<HTMLButtonElement>('#camera')!.onclick = event => {
   overhead = !overhead;
+  syncTableSurface();
   cameraTarget = overhead ? 0.025 : 0.83;
   if (overhead) fitOverheadCamera();
   else {
@@ -1325,20 +1331,25 @@ showScore();
 showReadyStatus();
 
 function fitOverheadCamera() {
+  syncTableSurface();
   if (!overhead || viewMode) return;
   const bounds = activeTableCanvas().getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
   const header = document.querySelector('header')!.getBoundingClientRect();
   document.documentElement.style.setProperty('--notice-top', header.bottom + 8 + 'px');
   const footer = document.querySelector('footer')!.getBoundingClientRect();
-  if (uses2dTable()) tvTable?.resize(bounds.width, bounds.height, header.bottom - bounds.top + 12, footer.top - bounds.top - 12);
+
   // Phones keep the long axis vertical, including when held sideways.
   const mobile = window.matchMedia('(max-width: 600px), (pointer: coarse) and (max-height: 600px)').matches;
   const landscape = (uses2dTable() || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
   document.documentElement.style.setProperty('--shot-controls-height', bounds.bottom - footer.top + 'px');
-  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && !uses2dTable() ? document.querySelector('.camera-zoom')!.getBoundingClientRect().top : footer.top;
+  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && (!uses2dTable() || usesSvgTable()) ? document.querySelector('.camera-zoom')!.getBoundingClientRect().top : footer.top;
   const bottom = Math.min(footer.top, zoomTop) - bounds.top - 6;
+  if (uses2dTable()) {
+    if (tvTable instanceof SvgTable) tvTable.resize(bounds.width, bounds.height, top, bottom, cameraZoom);
+    else tvTable?.resize(bounds.width, bounds.height, top, bottom);
+  }
   const availableHeight = Math.max(1, bottom - top);
   const availableWidth = Math.max(1, bounds.width - 16);
   const tableWidth = (landscape ? length : width) + 0.27;
@@ -1404,9 +1415,7 @@ function applyTvMode() {
   document.body.classList.toggle('tv-mode', tvEnabled);
   document.body.classList.toggle('compatibility-table', webglUnavailable);
   tvPanel.hidden = !tvEnabled;
-  tvCanvas.hidden = !uses2dTable();
-  canvas.hidden = uses2dTable();
-  if (uses2dTable() && !tvTable) tvTable = new TvTable(tvCanvas);
+  syncTableSurface();
   tvToggle.textContent = tvEnabled ? 'TV on' : 'TV off';
   tvToggle.setAttribute('aria-pressed', String(tvEnabled));
   const compatibility = document.querySelector<HTMLElement>('#tvCompatibility')!;
