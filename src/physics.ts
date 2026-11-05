@@ -2,7 +2,10 @@ export const radius = 0.028575;
 export const width = 1.27;
 export const length = 2.54;
 export const pockets = [-1, 1].flatMap(side =>
-  [-1, 0, 1].map(end => ({ x: side * width / 2, z: end * length / 2 }))
+  [-1, 0, 1].map(end => ({
+    x: side * (width / 2 + (end === 0 ? 0.024 : 0.016)),
+    z: end === 0 ? 0 : end * (length / 2 + 0.016),
+  }))
 );
 
 export interface Ball {
@@ -25,6 +28,11 @@ export function rack(snooker = false): Ball[] {
       balls.push(make((column - row / 2) * spacing, 0.48 + row * spacing * Math.sqrt(3) / 2));
     }
   }
+  if (!snooker) {
+    // Eight in the centre; one solid and one stripe at the rear corners.
+    [balls[5], balls[8]] = [balls[8], balls[5]];
+    [balls[7], balls[11]] = [balls[11], balls[7]];
+  }
   if (snooker) {
     balls[0] = make(-0.12, -0.77);
     balls.push(make(0.22, -0.74), make(-0.22, -0.74), make(0, -0.74), make(0, 0), make(0, 0.40), make(0, 1.05));
@@ -32,68 +40,208 @@ export function rack(snooker = false): Ball[] {
   return balls;
 }
 
-export function step(balls: Ball[], dt: number, sound?: (kind: 'ball' | 'pocket', strength: number) => void) {
+// spinX/spinZ are the horizontal surface speeds produced by rotation, in m/s.
+// sideSpin is angular velocity about the vertical axis, in radians/s.
+export const rollingDeceleration = 0.25;
+const slidingDeceleration = 1.96;
+const ballRestitution = 0.96;
+const cushionRestitution = 0.78;
+const pocketCaptureRadius = 0.058;
+const stopSpeed = 0.005;
+export const maxShotSpeed = 4.3;
+export const maxBallSpeed = 8;
+export const shotSpeed = (power: number) => maxShotSpeed * Math.max(0, Math.min(1, Number.isFinite(power) ? power : 0)) ** 1.35;
+
+type Sound = (kind: 'ball' | 'pocket', strength: number) => void;
+type Cushion = { ax: number; az: number; bx: number; bz: number; jaw?: boolean };
+// Match the six visible cushions, leaving actual openings at all six pockets.
+export const cushions: Cushion[] = [];
+for (const side of [-1, 1]) {
+  const x = side * (width / 2 - 0.005);
+  const z = side * (length / 2 - 0.005);
+  for (const end of [-1, 1]) {
+    cushions.push({ ax: x, az: end * 0.085, bx: x, bz: end * (length / 2 - 0.12) });
+  }
+  cushions.push({ ax: -width / 2 + 0.12, az: z, bx: width / 2 - 0.12, bz: z });
+  // Angled jaws funnel balls into the wells instead of leaving gaps into the room.
+  const sidePocket = pockets.find(p => Math.sign(p.x) === side && p.z === 0)!;
+  for (const end of [-1, 1]) {
+    cushions.push({ ax: x, az: end * 0.085, bx: sidePocket.x + side * 0.04, bz: end * 0.035, jaw: true });
+    const corner = pockets.find(p => Math.sign(p.x) === side && Math.sign(p.z) === end)!;
+    cushions.push({ ax: x, az: end * (length / 2 - 0.12), bx: corner.x + side * 0.04, bz: corner.z - end * 0.035, jaw: true });
+    cushions.push({ ax: side * (width / 2 - 0.12), az: end * (length / 2 - 0.005), bx: corner.x - side * 0.035, bz: corner.z + end * 0.04, jaw: true });
+  }
+}
+
+export function strikeBall(ball: Ball, dx: number, dz: number, speed: number, tipX = 0, tipY = 0) {
+  const directionLength = Math.hypot(dx, dz);
+  if (!Number.isFinite(directionLength) || directionLength < 1e-10 || ball.pocketed) return;
+  dx /= directionLength;
+  dz /= directionLength;
+  speed = Math.max(0, Math.min(maxShotSpeed, Number.isFinite(speed) ? speed : 0));
+  tipX = Number.isFinite(tipX) ? tipX : 0;
+  tipY = Number.isFinite(tipY) ? tipY : 0;
+  const tipScale = Math.max(1, Math.hypot(tipX, tipY) / 0.78);
+  tipX /= tipScale;
+  tipY /= tipScale;
+  ball.vx = dx * speed;
+  ball.vz = dz * speed;
+  ball.spinX = dx * speed * tipY * 1.8;
+  ball.spinZ = dz * speed * tipY * 1.8;
+  ball.sideSpin = -tipX * speed * 0.65 / radius;
+}
+
+function guardBall(ball: Ball) {
+  if (ball.pocketed) { ball.vx = ball.vz = ball.spinX = ball.spinZ = ball.sideSpin = 0; return; }
+  if (![ball.x, ball.z, ball.vx, ball.vz, ball.spinX, ball.spinZ, ball.sideSpin].every(Number.isFinite)) {
+    ball.x = Number.isFinite(ball.x) ? ball.x : 0;
+    ball.z = Number.isFinite(ball.z) ? ball.z : 0;
+    ball.vx = ball.vz = ball.spinX = ball.spinZ = ball.sideSpin = 0;
+  }
+  const scale = Math.max(1, Math.hypot(ball.vx, ball.vz) / maxBallSpeed);
+  ball.vx /= scale;
+  ball.vz /= scale;
+  const spinScale = Math.max(1, Math.hypot(ball.spinX, ball.spinZ) / (maxBallSpeed * 1.5));
+  ball.spinX /= spinScale;
+  ball.spinZ /= spinScale;
+  ball.sideSpin = Math.max(-200, Math.min(200, ball.sideSpin));
+  // Last-resort containment: pocket throats may extend behind the cloth edge,
+  // but no active ball may cross the outside of the frame, even after a bad input.
+  const inMouth = pockets.some(p => Math.hypot(p.x - ball.x, p.z - ball.z) < 0.12);
+  const xLimit = inMouth ? width / 2 + 0.04 : width / 2 - radius - 0.005;
+  const zLimit = inMouth ? length / 2 + 0.04 : length / 2 - radius - 0.005;
+  if (Math.abs(ball.x) > xLimit) {
+    const side = Math.sign(ball.x);
+    ball.x = side * xLimit;
+    if (ball.vx * side > 0) ball.vx *= -cushionRestitution;
+  }
+  if (Math.abs(ball.z) > zLimit) {
+    const side = Math.sign(ball.z);
+    ball.z = side * zLimit;
+    if (ball.vz * side > 0) ball.vz *= -cushionRestitution;
+  }
+}
+
+export function isMoving(ball: Ball) {
+  return !ball.pocketed && (Math.hypot(ball.vx, ball.vz) > 0 || Math.hypot(ball.spinX, ball.spinZ) > 0);
+}
+
+function clothFriction(ball: Ball, dt: number) {
+  const slipX = ball.vx - ball.spinX;
+  const slipZ = ball.vz - ball.spinZ;
+  const slip = Math.hypot(slipX, slipZ);
+  // A solid sphere's rotational response is 5/2 of its translational response.
+  // Stop sliding exactly at rolling contact so friction never overshoots.
+  const slidingTime = Math.min(dt, slip / (3.5 * slidingDeceleration));
+  if (slip > 1e-10) {
+    const change = slidingDeceleration * slidingTime / slip;
+    ball.vx -= slipX * change;
+    ball.vz -= slipZ * change;
+    ball.spinX += slipX * change * 2.5;
+    ball.spinZ += slipZ * change * 2.5;
+  }
+  if (slidingTime < dt) {
+    const speed = Math.hypot(ball.vx, ball.vz);
+    const remaining = Math.max(0, speed - rollingDeceleration * (dt - slidingTime));
+    const scale = speed ? remaining / speed : 0;
+    ball.vx *= scale;
+    ball.vz *= scale;
+    ball.spinX = ball.vx;
+    ball.spinZ = ball.vz;
+  }
+  ball.sideSpin *= Math.exp(-dt * 1.5);
+  if (Math.hypot(ball.vx, ball.vz) < stopSpeed && Math.hypot(ball.spinX, ball.spinZ) < stopSpeed) {
+    ball.vx = ball.vz = ball.spinX = ball.spinZ = 0;
+  }
+}
+
+function cushionContact(ball: Ball, cushion: Cushion) {
+  const dx = cushion.bx - cushion.ax, dz = cushion.bz - cushion.az;
+  const t = Math.max(0, Math.min(1, ((ball.x - cushion.ax) * dx + (ball.z - cushion.az) * dz) / (dx * dx + dz * dz)));
+  const px = ball.x - cushion.ax - t * dx;
+  const pz = ball.z - cushion.az - t * dz;
+  const distance = Math.hypot(px, pz);
+  if (distance >= radius || distance < 1e-10) return;
+  const nx = px / distance, nz = pz / distance;
+  ball.x += nx * (radius - distance);
+  ball.z += nz * (radius - distance);
+  const normalSpeed = ball.vx * nx + ball.vz * nz;
+  if (normalSpeed >= 0) return;
+  const impulse = -(1 + cushionRestitution) * normalSpeed;
+  ball.vx += nx * impulse;
+  ball.vz += nz * impulse;
+  const tx = -nz, tz = nx;
+  const slip = ball.vx * tx + ball.vz * tz + radius * ball.sideSpin;
+  const maxFriction = 0.12 * impulse;
+  const friction = Math.max(-maxFriction, Math.min(maxFriction, -slip / 3.5));
+  ball.vx += tx * friction;
+  ball.vz += tz * friction;
+  ball.sideSpin += 2.5 * friction / radius;
+}
+
+function substep(balls: Ball[], dt: number, sound?: Sound) {
   for (const ball of balls) {
     if (ball.pocketed) continue;
+    clothFriction(ball, dt);
     ball.x += ball.vx * dt;
     ball.z += ball.vz * dt;
-    if (pockets.some(p => Math.hypot(p.x - ball.x, p.z - ball.z) < 0.067)) {
+    if (pockets.some(p => Math.hypot(p.x - ball.x, p.z - ball.z) < pocketCaptureRadius)) {
       sound?.('pocket', Math.max(0.6, Math.hypot(ball.vx, ball.vz)));
       ball.pocketed = true;
       ball.vx = ball.vz = ball.spinX = ball.spinZ = ball.sideSpin = 0;
-      continue;
     }
-    const xLimit = width / 2 - radius;
-    const zLimit = length / 2 - radius;
-    if (Math.abs(ball.x) > xLimit) {
-      ball.x = Math.sign(ball.x) * xLimit;
-      ball.vz -= Math.sign(ball.x) * ball.sideSpin * 0.12;
-      ball.vx = -Math.sign(ball.x) * Math.abs(ball.vx) * 0.77;
-    }
-    if (Math.abs(ball.z) > zLimit) {
-      ball.z = Math.sign(ball.z) * zLimit;
-      ball.vx += Math.sign(ball.z) * ball.sideSpin * 0.12;
-      ball.vz = -Math.sign(ball.z) * Math.abs(ball.vz) * 0.77;
-    }
-    const spinDecay = Math.exp(-dt * 5);
-    ball.vx += ball.spinX * dt;
-    ball.vz += ball.spinZ * dt;
-    ball.spinX *= spinDecay;
-    ball.spinZ *= spinDecay;
-    ball.sideSpin *= spinDecay;
-    const speed = Math.hypot(ball.vx, ball.vz);
-    const scale = speed > 0.012 ? Math.max(0, speed - 0.37 * dt) / speed : 0;
-    ball.vx *= scale;
-    ball.vz *= scale;
   }
   let firstContact: number | undefined;
-  for (let i = 0; i < balls.length; i++) {
-    const a = balls[i];
-    if (a.pocketed) continue;
-    for (let j = i + 1; j < balls.length; j++) {
-      const b = balls[j];
-      if (b.pocketed) continue;
-      const dx = b.x - a.x, dz = b.z - a.z;
-      const distance = Math.hypot(dx, dz);
-      if (distance >= 2 * radius) continue;
-      const nx = distance ? dx / distance : 1, nz = distance ? dz / distance : 0;
-      const correction = (2 * radius - distance) / 2;
-      a.x -= nx * correction;
-      a.z -= nz * correction;
-      b.x += nx * correction;
-      b.z += nz * correction;
-      const closing = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
-      if (closing <= 0) continue;
-      if (i === 0) firstContact ??= j;
-      sound?.('ball', closing);
-      const impulse = closing * 0.97;
-      a.vx -= impulse * nx;
-      a.vz -= impulse * nz;
-      b.vx += impulse * nx;
-      b.vz += impulse * nz;
+  // Revisit contacts so a packed rack transmits impulses during the same step.
+  for (let iteration = 0; iteration < 6; iteration++) {
+    for (let i = 0; i < balls.length; i++) {
+      const a = balls[i];
+      if (a.pocketed) continue;
+      for (let j = i + 1; j < balls.length; j++) {
+        const b = balls[j];
+        if (b.pocketed) continue;
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const squared = dx * dx + dz * dz;
+        if (squared > 4 * radius * radius) continue;
+        const distance = Math.sqrt(squared);
+        const nx = distance ? dx / distance : 1, nz = distance ? dz / distance : 0;
+        const correction = (2 * radius - distance) / 2;
+        a.x -= nx * correction;
+        a.z -= nz * correction;
+        b.x += nx * correction;
+        b.z += nz * correction;
+        const closing = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
+        if (closing <= 1e-8) continue;
+        if (i === 0) firstContact ??= j;
+        sound?.('ball', closing);
+        const impulse = closing * (1 + ballRestitution) / 2;
+        a.vx -= impulse * nx;
+        a.vz -= impulse * nz;
+        b.vx += impulse * nx;
+        b.vz += impulse * nz;
+      }
+    }
+    for (const ball of balls) {
+      if (!ball.pocketed) for (const cushion of cushions) cushionContact(ball, cushion);
+      guardBall(ball);
     }
   }
   return firstContact;
 }
 
-
+export function step(balls: Ball[], dt: number, sound?: Sound) {
+  if (!Number.isFinite(dt) || dt <= 0) return;
+  dt = Math.min(dt, 0.1);
+  for (const ball of balls) guardBall(ball);
+  const fastest = Math.max(0, ...balls.filter(ball => !ball.pocketed).map(ball => Math.max(
+    Math.hypot(ball.vx, ball.vz), Math.hypot(ball.spinX, ball.spinZ),
+  )));
+  // Limit both elapsed time and distance travelled to prevent tunnelling.
+  const count = Math.max(1, Math.ceil(dt / Math.min(1 / 300, radius * 0.2 / Math.max(fastest, 0.01))));
+  let firstContact: number | undefined;
+  for (let i = 0; i < count; i++) {
+    const contact = substep(balls, dt / count, sound);
+    firstContact ??= contact;
+  }
+  return firstContact;
+}

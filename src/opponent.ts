@@ -1,8 +1,8 @@
-import { length, pockets, radius, width, type Ball } from './physics';
+import { length, pockets, radius, rollingDeceleration, width, type Ball } from './physics';
 
 export function chooseShot(balls: Ball[], legal: number[], difficulty: string) {
   const cue = balls[0];
-  let best: { angle: number; power: number; cost: number } | undefined;
+  let best: { angle: number; power: number; cost: number; pocket: number } | undefined;
   function clear(ax: number, az: number, bx: number, bz: number, target: number) {
     const dx = bx - ax, dz = bz - az;
     const squared = dx * dx + dz * dz;
@@ -28,8 +28,9 @@ export function chooseShot(balls: Ball[], legal: number[], difficulty: string) {
       const cost = reach + distance + 1.5 * (1 - cut);
       if (!best || cost < best.cost) best = {
         angle: Math.atan2(x - cue.x, z - cue.z),
-        power: Math.min(0.9, Math.sqrt(0.74 * (reach + distance / (cut * cut)) + 0.45) / 4.3),
+        power: Math.min(0.95, (Math.sqrt(2 * rollingDeceleration * (reach + distance / (cut * cut)) + 0.45) / (4.3 * 0.72)) ** (1 / 1.35)),
         cost,
+        pocket: pockets.indexOf(pocket),
       };
     }
   }
@@ -39,5 +40,5 @@ export function chooseShot(balls: Ball[], legal: number[], difficulty: string) {
   if (!best && target === undefined) return;
   const angle = best?.angle ?? Math.atan2(balls[target].x - cue.x, balls[target].z - cue.z);
   const error = difficulty === 'Easy' ? 0.085 : difficulty === 'Hard' ? 0.005 : 0.025;
-  return { angle: angle + (Math.random() * 2 - 1) * error, power: best?.power ?? 0.55 };
+  return { angle: angle + (Math.random() * 2 - 1) * error, power: best?.power ?? 0.55, pocket: best?.pocket };
 }

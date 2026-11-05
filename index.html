@@ -9,25 +9,41 @@
 </head>
 <body>
   <header>
-    <div>
-      <span class="eyebrow">THE BILLIARD ROOM</span><strong>Take your shot.</strong>
-      <small id="score"></small><small id="status" role="status">Tap or drag on the table to aim.</small>
+    <div class="game-heading">
+      <strong>Billiard</strong>
+      <span id="shotClock" role="timer" aria-label="Online shot time remaining" hidden>30s</span>
+      <small id="status" role="status">Tap or drag on the table to aim.</small>
     </div>
+    <div id="score" aria-label="Players and pocketed balls"></div>
     <nav aria-label="Table controls">
       <button class="ui-button" id="viewMode" type="button" aria-pressed="false">View off</button>
-      <button class="ui-button" id="camera" type="button">Overhead</button>
+      <button class="ui-button" id="camera" type="button">Perspective</button>
       <button class="ui-button" id="reset" type="button">Re-rack</button>
+      <button class="ui-button" id="openOnline" type="button">Profile</button>
       <button class="ui-button" id="openSettings" type="button">Settings</button>
     </nav>
   </header>
   <main><canvas id="table" aria-label="3D pool table"></canvas></main>
+  <section id="gameNotice" class="game-notice" role="status" aria-live="polite" hidden>
+    <span class="eyebrow" id="noticeLabel"></span><strong id="noticeTitle"></strong><small id="noticeDetail"></small>
+    <button class="ui-button ui-button--primary" id="noticeRematch" type="button" hidden>Play again</button>
+  </section>
+  <aside class="camera-zoom" aria-label="Camera zoom">
+    <span class="zoom-label">ZOOM</span>
+    <button class="zoom-button" id="zoomIn" type="button" aria-label="Zoom in">+</button>
+    <div class="zoom-ruler"><input id="cameraZoom" type="range" min="0.65" max="2.5" step="0.05" value="1" aria-label="Camera magnification" aria-valuetext="1 times zoom"></div>
+    <button class="zoom-button" id="zoomOut" type="button" aria-label="Zoom out">−</button>
+    <button class="zoom-button zoom-value" id="zoomFit" type="button" aria-label="Reset zoom to fit the table" title="Fit table">1.0×</button>
+  </aside>
   <footer aria-label="Shot controls">
+    <div class="call-pocket" id="callPocket" hidden><label for="pocketChoice">Black 8 · Call pocket</label><select class="ui-select" id="pocketChoice"><option value="">Choose on the table…</option><option value="0">Head · left</option><option value="1">Middle · left</option><option value="2">Foot · left</option><option value="3">Head · right</option><option value="4">Middle · right</option><option value="5">Foot · right</option></select></div>
+    <button class="ui-button" id="lockAim" type="button" aria-pressed="false" title="Lock aim to pull back and shoot on the table">Lock aim</button>
     <div class="contact">
-      <span class="control-label">01 · Spin</span>
+      <span class="control-label">Spin</span>
       <button class="ui-button" id="tip" aria-label="Cue ball contact point. Use arrow keys to adjust or Home to center." type="button"><span id="tipMark"></span></button>
     </div>
     <div class="power">
-      <div class="power-label"><span class="control-label">02 · Pull &amp; release</span><output id="powerValue">0%</output></div>
+      <div class="power-label"><span class="control-label">Pull &amp; release</span><output id="powerValue">0%</output></div>
       <button class="ui-button" id="stroke" type="button" aria-label="Pull the cue left and release to shoot" aria-describedby="strokeHint">
         <span class="cue-track" aria-hidden="true"><span class="cue-stick"></span><span class="cue-target"></span></span>
         <span class="power-track" aria-hidden="true"><span></span></span>
@@ -39,9 +55,10 @@
   <form method="dialog">
     <div class="settings-heading"><span class="eyebrow">MAKE IT YOURS</span><h2 id="settingsTitle">Your room, your game.</h2></div>
     <p>Set the pace, choose your finish, and settle in.</p><fieldset><legend>Play</legend>
-    <label class="ui-field"><span>Game</span><span class="ui-select-wrap"><select class="ui-select" id="game"><option value="pool">Pool · Straight potting</option><option value="snooker">Snooker</option></select></span></label>
-    <label class="ui-field"><span>Play</span><span class="ui-select-wrap"><select class="ui-select" id="opponent"><option value="solo">Solo practice</option><option value="computer">Against computer</option></select></span></label>
+    <label class="ui-field"><span>Game</span><span class="ui-select-wrap"><select class="ui-select" id="game"><option value="pool">Pool · Eight-ball</option><option value="snooker">Snooker</option></select></span></label>
+    <label class="ui-field"><span>Play</span><span class="ui-select-wrap"><select class="ui-select" id="opponent"><option value="solo">Practice · Control both players</option><option value="computer">Against computer</option></select></span></label>
     <label class="ui-field"><span>Difficulty</span><span class="ui-select-wrap"><select class="ui-select" id="difficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></span></label>
+    <div class="sound-row"><div><strong>Shot guides</strong><small>Aim line, object-ball path and pocket highlight</small></div><button class="ui-button" id="guidesToggle" type="button" aria-pressed="true">Guides on</button></div>
     </fieldset><fieldset><legend>Room &amp; equipment</legend>
     <label class="ui-field"><span>Cue</span><span class="ui-select-wrap"><select class="ui-select" id="cueStyle"><option>Classic Maple</option><option>Rosewood</option><option>Carbon Black</option></select></span></label>
     <label class="ui-field"><span>Table</span><span class="ui-select-wrap"><select class="ui-select" id="tableStyle"><option>Club Green</option><option>Tournament Blue</option><option>Burgundy Lounge</option></select></span></label>
@@ -54,6 +71,25 @@
     <p class="settings-note">Game and opponent changes apply when you start a new game.</p>
     <div class="ui-dialog-actions"><button class="ui-button" value="close">Done</button><button class="ui-button ui-button--primary" id="newMatch" value="start">Start new game</button></div>
   </form>
+</dialog>
+<dialog class="ui-dialog" id="online" aria-labelledby="onlineTitle">
+  <div class="settings-heading"><span class="eyebrow">YOUR PROFILE · PLAY TOGETHER</span><h2 id="onlineTitle">Your player profile</h2></div>
+  <label class="profile-name" for="profileName">Your name<input class="ui-select" id="profileName" maxlength="24" autocomplete="nickname"></label>
+  <p>Your player ID: <strong id="playerId">Connecting…</strong></p>
+  <p id="onlineStatus" role="status"></p>
+  <button class="ui-button ui-button--primary" id="hostOnline" type="button">Accept online invites</button>
+  <div id="invite" hidden>
+    <canvas id="inviteQr" aria-label="Scan this QR code to join the game"></canvas>
+    <a id="inviteLink"></a>
+    <small id="inviteNote"></small>
+    <button class="ui-button" id="copyInvite" type="button">Copy invite</button>
+    <small>Choose “Accept online invites” before your opponent scans your code.</small>
+  </div>
+  <div class="join-row"><label for="opponentId">Opponent’s player ID</label><input class="ui-select" id="opponentId" maxlength="12" autocomplete="off" spellcheck="false" placeholder="12-character ID"><button class="ui-button" id="joinOnline" type="button">Join player</button></div>
+  <div class="scan-actions"><button class="ui-button" id="scanInvite" type="button">Scan player QR</button><label class="ui-button photo-picker">Read QR photo<input id="scanPhoto" type="file" accept="image/*" capture="environment"></label></div>
+  <div id="scanner" hidden><video id="scanVideo" autoplay playsinline muted aria-label="QR scanner camera preview"></video><button class="ui-button" id="stopScan" type="button">Stop camera</button></div>
+  <p class="settings-note">Both players use the same game server. Practice and computer games always have two sides. In eight-ball, groups are assigned after the first legal pot following the break.</p>
+  <div class="ui-dialog-actions"><button class="ui-button" id="leaveOnline" type="button">Leave game</button><form method="dialog"><button class="ui-button" value="close">Close</button></form></div>
 </dialog>
 <script type="module" src="/src/theme.ts"></script>
 <script type="module" src="/src/main.ts"></script>

@@ -1,16 +1,60 @@
 import { GameAudio } from './audio';
+import { cueLength, cuePose } from './cue-geometry';
+import { traceShot } from './aim-guide';
+import { OnlineGame } from './online';
+import { groupOf, poolTargets, resolvePoolShot, type Groups } from './pool-rules';
+import { validGame, type SavedGame } from './saved-game';
 import { constrainOrbit } from './camera-bounds';
 import {
-  ArcRotateCamera, Color3, Color4, DirectionalLight, DynamicTexture, Engine,
-  HemisphericLight, ShadowGenerator, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3,
+  ArcRotateCamera, Camera, Color3, Color4, DirectionalLight, DynamicTexture, Engine,
+  HemisphericLight, ShadowGenerator, Matrix, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3,
 } from '@babylonjs/core';
 import { furnishRoom } from './room';
 import { chooseShot } from './opponent';
-import { length, pockets, rack, radius, step, width } from './physics';
+import { isMoving, length, pockets, rack, radius, shotSpeed, step, strikeBall, width } from './physics';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#table')!;
 const status = document.querySelector<HTMLElement>('#status')!;
 const quality = document.querySelector<HTMLSelectElement>('#quality')!;
+const zoomSlider = document.querySelector<HTMLInputElement>('#cameraZoom')!;
+const zoomFit = document.querySelector<HTMLButtonElement>('#zoomFit')!;
+let cameraZoom = 1;
+try {
+  const saved = Number(localStorage.getItem('billiard-camera-zoom'));
+  if (Number.isFinite(saved) && saved >= 0.65 && saved <= 2.5) cameraZoom = saved;
+} catch {}
+function zoomFov() { return 2 * Math.atan(Math.tan(1.1 / 2) / cameraZoom); }
+function showZoom() {
+  zoomSlider.value = String(cameraZoom);
+  zoomSlider.setAttribute('aria-valuetext', cameraZoom.toFixed(1) + ' times zoom');
+  zoomFit.textContent = cameraZoom.toFixed(1) + '×';
+}
+function setCameraZoom(value: number) {
+  if (!Number.isFinite(value)) return;
+  cameraZoom = Math.max(0.65, Math.min(2.5, Math.round(value * 20) / 20));
+  showZoom();
+  if (overhead && !viewMode) fitOverheadCamera();
+  else camera.fov = zoomFov();
+  try { localStorage.setItem('billiard-camera-zoom', String(cameraZoom)); } catch {}
+}
+zoomSlider.oninput = () => setCameraZoom(Number(zoomSlider.value));
+document.querySelector<HTMLButtonElement>('#zoomIn')!.onclick = () => setCameraZoom(cameraZoom + 0.1);
+document.querySelector<HTMLButtonElement>('#zoomOut')!.onclick = () => setCameraZoom(cameraZoom - 0.1);
+zoomFit.onclick = () => setCameraZoom(1);
+showZoom();
+const guidesToggle = document.querySelector<HTMLButtonElement>('#guidesToggle')!;
+let guidesEnabled = true;
+try { guidesEnabled = localStorage.getItem('billiard-guides') !== 'off'; } catch {}
+function updateGuides() {
+  guidesToggle.textContent = guidesEnabled ? 'Guides on' : 'Guides off';
+  guidesToggle.setAttribute('aria-pressed', String(guidesEnabled));
+}
+guidesToggle.onclick = () => {
+  guidesEnabled = !guidesEnabled;
+  try { localStorage.setItem('billiard-guides', guidesEnabled ? 'on' : 'off'); } catch {}
+  updateGuides();
+};
+updateGuides();
 const sound = new GameAudio();
 const soundToggle = document.querySelector<HTMLButtonElement>('#soundToggle')!;
 const volume = document.querySelector<HTMLInputElement>('#volume')!;
@@ -41,14 +85,14 @@ document.addEventListener('keydown', () => { void sound.unlock(); });
 const engine = new Engine(canvas, true);
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.045, 0.062, 0.057, 1);
-const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0.83, 3.65, Vector3.Zero(), scene);
+const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0.025, 2.5, Vector3.Zero(), scene);
 camera.lowerRadiusLimit = 0.7;
 camera.lowerBetaLimit = 0.025;
 camera.upperBetaLimit = 1.28;
 camera.allowUpsideDown = false;
 camera.panningSensibility = 0;
 camera.minZ = 0.03;
-camera.fov = 1.1;
+camera.fov = zoomFov();
 camera.onAfterCheckInputsObservable.add(() => {
   const safe = constrainOrbit(camera.alpha, camera.beta, camera.radius);
   if (safe.radius !== camera.radius) camera.inertialRadiusOffset = 0;
@@ -85,6 +129,9 @@ const rubber = material('cushion', '#184739');
 const leather = material('pocket leather', '#211916', 0.14);
 const dark = material('pocket interior', '#090909');
 const brass = material('brass', '#bca074', 0.65);
+const pocketCallMaterial = material('called pocket marker', '#e8bd72');
+pocketCallMaterial.disableLighting = true;
+pocketCallMaterial.emissiveColor = Color3.FromHexString('#e8bd72');
 const pearl = material('mother of pearl sights', '#e8dfc9', 0.4);
 const trim = material('ebony frame accents', '#201e1b', 0.3);
 const floor = material('room floor', '#202923');
@@ -110,6 +157,7 @@ function weave() {
     ctx.fillRect(0, i, 1024, 1);
   }
   ctx.globalCompositeOperation = 'destination-out';
+  ctx.fillStyle = '#000000';
   for (const pocket of pockets) {
     ctx.save();
     ctx.translate((pocket.x / width + 0.5) * 1024, (pocket.z / length + 0.5) * 1024);
@@ -156,22 +204,40 @@ bed.receiveShadows = true;
 bed.isPickable = true;
 for (const side of [-1, 1]) {
   for (const end of [-1, 1]) {
-    box('side rail', side * (width / 2 + 0.061), 0.018, end * length / 4, 0.122, 0.09, length / 2 - 0.16, wood);
-    box('rail edge inlay', side * (width / 2 + 0.114), 0.064, end * length / 4, 0.004, 0.002, length / 2 - 0.19, brass);
-    box('side cushion', side * (width / 2 + 0.012), 0.039, end * length / 4, 0.034, 0.042, length / 2 - 0.17, rubber);
+    const railCenter = end * (0.085 + length / 2 - 0.12) / 2;
+    box('side rail', side * (width / 2 + 0.061), 0.018, railCenter, 0.122, 0.09, length / 2 - 0.205, wood);
+    box('rail edge inlay', side * (width / 2 + 0.114), 0.064, railCenter, 0.004, 0.002, length / 2 - 0.225, brass);
+    box('side cushion', side * (width / 2 + 0.012), 0.039, railCenter, 0.034, 0.042, length / 2 - 0.205, rubber);
   }
-  box('end rail', 0, 0.018, side * (length / 2 + 0.061), width - 0.17, 0.09, 0.122, wood);
-  box('end edge inlay', 0, 0.064, side * (length / 2 + 0.114), width - 0.20, 0.002, 0.004, brass);
+  box('end rail', 0, 0.018, side * (length / 2 + 0.061), width - 0.24, 0.09, 0.122, wood);
+  box('end edge inlay', 0, 0.064, side * (length / 2 + 0.114), width - 0.26, 0.002, 0.004, brass);
   for (const x of [-0.31, 0, 0.31]) {
     const sight = box('end rail sight', x, 0.064, side * (length / 2 + 0.078), 0.012, 0.002, 0.012, pearl);
     sight.rotation.y = Math.PI / 4;
   }
-  box('end cushion', 0, 0.039, side * (length / 2 + 0.012), width - 0.18, 0.042, 0.034, rubber);
+  box('end cushion', 0, 0.039, side * (length / 2 + 0.012), width - 0.24, 0.042, 0.034, rubber);
   for (const z of [-0.92, -0.63, -0.34, 0.34, 0.63, 0.92]) {
     const sight = box('rail sight', side * (width / 2 + 0.078), 0.064, z, 0.012, 0.002, 0.012, pearl);
     sight.rotation.y = Math.PI / 4;
   }
 }
+const pocketSelectors = pockets.map((pocket, index) => {
+  const disc = MeshBuilder.CreateDisc('call pocket ' + index, {radius: 0.09, tessellation: 32, sideOrientation: 2}, scene);
+  disc.rotation.x = Math.PI / 2;
+  disc.position.set(pocket.x, 0.07, pocket.z);
+  disc.visibility = 0;
+  disc.isPickable = true;
+  disc.setEnabled(false);
+  return disc;
+});
+const pocketCallRings = pockets.map(pocket => {
+  const ring = MeshBuilder.CreateTorus('pocket call selection', {diameter: 0.16, thickness: 0.003, tessellation: 48}, scene);
+  ring.position.set(pocket.x, 0.035, pocket.z);
+  ring.material = pocketCallMaterial;
+  ring.isPickable = false;
+  ring.isVisible = false;
+  return ring;
+});
 for (const pocket of pockets) {
   const rim = MeshBuilder.CreateTorus('pocket rim', { diameter: 0.145, thickness: 0.017, tessellation: 32 }, scene);
   rim.position.set(pocket.x, 0.018, pocket.z);
@@ -258,6 +324,13 @@ const select = (id: string) => document.querySelector<HTMLSelectElement>('#' + i
 const score = document.querySelector<HTMLElement>('#score')!;
 let snooker = false;
 let versusComputer = false;
+const online = new OnlineGame();
+let onlineMode = false;
+let groups: Groups = [null, null];
+let winner: number | undefined;
+let breaking = true;
+let shotWasBreak = false;
+let calledPocket: number | undefined;
 let turn = 0;
 let scores = [0, 0];
 let colourAfterRed = false;
@@ -267,11 +340,17 @@ let shotTargets: number[] = [];
 let previouslyPocketed: boolean[] = [];
 let cpuWait = 0;
 let balls = rack();
+function canControl() {
+  return onlineMode ? online.active && turn === online.seat && online.remainingMs() > 0 : !versusComputer || turn === 0;
+}
+function playerName(seat: number) {
+  return onlineMode ? seat === online.seat ? online.name : online.peerName : seat === 0 ? online.name : versusComputer ? 'Computer' : 'Player 2';
+}
 const colourNames = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
 
 function legalTargets() {
   const active = balls.flatMap((ball, index) => index && !ball.pocketed ? [index] : []);
-  if (!snooker) return active;
+  if (!snooker) return poolTargets(balls.map(ball => ball.pocketed), groups[turn]);
   const reds = active.filter(index => index <= 15);
   const colours = active.filter(index => index > 15);
   if (colourAfterRed) return colours;
@@ -279,11 +358,41 @@ function legalTargets() {
 }
 
 function showScore() {
-  const points = versusComputer ? 'You ' + scores[0] + ' · Computer ' + scores[1] : 'Score ' + scores[0];
-  const target = legalTargets()[0];
-  const on = colourAfterRed ? 'colour' : target <= 15 ? 'red' : colourNames[target - 16];
-  score.textContent = (snooker ? 'Snooker' : 'Pool') + ' · ' + points +
-    (snooker && !finished && on ? ' · On ' + on : '');
+  score.replaceChildren(...[0, 1].map(seat => {
+    const item = document.createElement('span');
+    item.className = 'player-score' + (turn === seat && !finished ? ' active' : '');
+    if (turn === seat) item.setAttribute('aria-current', 'true');
+    const marker = document.createElement('span');
+    marker.className = 'group-marker ' + (snooker || !groups[seat] ? 'open' : groups[seat]!.toLowerCase());
+    marker.setAttribute('aria-hidden', 'true');
+    const left = balls.filter((ball, index) => !ball.pocketed && groupOf(index) === groups[seat]).length;
+    const name = document.createElement('strong');
+    name.className = 'player-name';
+    name.textContent = playerName(seat);
+    const detail = document.createElement('span');
+    detail.className = 'player-group';
+    detail.textContent = snooker ? 'Score · ' + scores[seat] : groups[seat] ? groups[seat] + ' · ' + left + ' left' : 'Open table';
+    const tray = document.createElement('span');
+    tray.className = 'potted-balls';
+    if (!snooker && groups[seat]) {
+      const numbers = balls.flatMap((ball, index) => groupOf(index) === groups[seat] ? [{number: index, potted: ball.pocketed}] : []);
+      numbers.sort((a, b) => Number(a.potted) - Number(b.potted) || a.number - b.number);
+      for (const ball of numbers) {
+        const badge = document.createElement('span');
+        badge.className = 'score-ball ' + (ball.potted ? 'achieved' : 'pending') + (ball.number > 8 ? ' stripe' : '');
+        badge.style.setProperty('--ball-color', palette[(ball.number - 1) % 8]);
+        badge.textContent = String(ball.number);
+        badge.title = 'Ball ' + ball.number + (ball.potted ? ' · pocketed' : ' · on table');
+        badge.setAttribute('aria-label', badge.title);
+        tray.append(badge);
+      }
+    } else {
+      tray.classList.add('empty');
+      tray.textContent = snooker ? 'Snooker' : 'Groups unassigned';
+    }
+    item.append(marker, name, detail, tray);
+    return item;
+  }));
 }
 
 function respot(index: number) {
@@ -309,13 +418,32 @@ function respot(index: number) {
 function finishShot() {
   const potted = balls.flatMap((ball, index) => index && ball.pocketed && !previouslyPocketed[index] ? [index] : []);
   const scratch = balls[0].pocketed;
+  if (!snooker) {
+    const eightPocket = balls[8].pocketed ? pockets.reduce((closest, pocket, index) =>
+      Math.hypot(pocket.x - balls[8].x, pocket.z - balls[8].z) < Math.hypot(pockets[closest].x - balls[8].x, pockets[closest].z - balls[8].z) ? index : closest, 0) : undefined;
+    const result = resolvePoolShot({ turn, groups, targets: shotTargets, firstContact, potted, scratch, breaking: shotWasBreak, calledPocket, eightPocket });
+    groups = result.groups;
+    winner = result.winner;
+    finished = winner !== undefined;
+    if (result.respotEight) respot(8);
+    if (scratch) respot(0);
+    if (!finished) turn = result.turn;
+    placement = result.foul && !finished ? 'foul' : undefined;
+    if (placement && canControl() && viewMode) viewToggle.click();
+    breaking = false;
+    calledPocket = undefined;
+    cpuWait = 0.85;
+    showScore();
+    showReadyStatus();
+    return;
+  }
   const foul = scratch || (snooker && (
     firstContact === undefined || !shotTargets.includes(firstContact) ||
     potted.some(index => !shotTargets.includes(index)) || (colourAfterRed && potted.length > 1)
   ));
   const value = (index: number) => index <= 15 ? 1 : index - 14;
   if (snooker) {
-    if (foul && versusComputer) scores[1 - turn] += Math.max(4, value(shotTargets[0]), value(firstContact ?? 0), ...potted.map(value));
+    if (foul) scores[1 - turn] += Math.max(4, value(shotTargets[0] ?? 0), value(firstContact ?? 0), ...potted.map(value));
     if (colourAfterRed || shotTargets[0] <= 15 || foul) {
       for (const index of potted) if (index > 15) respot(index);
     }
@@ -324,8 +452,8 @@ function finishShot() {
   if (!foul || !snooker) scores[turn] += snooker ? potted.reduce((sum, index) => sum + value(index), 0) : potted.length;
   if (scratch) respot(0);
   finished = legalTargets().length === 0;
-  if (!finished && versusComputer && (foul || !potted.length)) turn = 1 - turn;
-  if (foul && turn === 0 && !finished) {
+  if (!finished && (foul || !potted.length)) turn = 1 - turn;
+  if (foul && !finished) {
     placement = 'foul';
     if (viewMode) viewToggle.click();
   }
@@ -337,7 +465,7 @@ function finishShot() {
 balls.forEach((ball, index) => ballMeshes[index].position.set(ball.x, radius, ball.z));
 let aim = new Vector3(0, 0, 1);
 let rolling = false;
-let overhead = false;
+let overhead = true;
 let cameraTarget: number | undefined;
 let accumulator = 0;
 const fixedStep = 1 / 300;
@@ -346,7 +474,20 @@ const aimLine = MeshBuilder.CreateLines('aim guide', {
 }, scene);
 aimLine.color = Color3.FromHexString('#f0e6ba');
 aimLine.isPickable = false;
-const cue = MeshBuilder.CreateCylinder('cue', { height: 0.68, diameterTop: 0.011, diameterBottom: 0.027, tessellation: 16 }, scene);
+const objectGuide = MeshBuilder.CreateDashedLines('object ball path', { points: [Vector3.Zero(), Vector3.Forward()], dashNb: 36, updatable: true }, scene);
+objectGuide.color = Color3.FromHexString('#83ded0');
+objectGuide.isPickable = false;
+const ghostBall = MeshBuilder.CreateTorus('predicted cue ball contact', {diameter: 2 * radius, thickness: 0.002, tessellation: 40}, scene);
+ghostBall.material = material('contact guide', '#83ded0');
+ghostBall.isPickable = false;
+const pocketGuide = MeshBuilder.CreateTorus('lined up pocket', {diameter: 0.16, thickness: 0.004, tessellation: 48}, scene);
+pocketGuide.material = ghostBall.material;
+pocketGuide.isPickable = false;
+const handRing = MeshBuilder.CreateTorus('ball in hand indicator', {diameter: radius * 3.4, thickness: 0.003, tessellation: 48}, scene);
+handRing.material = pocketCallMaterial;
+handRing.isPickable = false;
+handRing.isVisible = false;
+const cue = MeshBuilder.CreateCylinder('cue', { height: cueLength, diameterTop: 0.011, diameterBottom: 0.027, tessellation: 16 }, scene);
 cue.material = material('cue maple', '#cb9358', 0.26);
 cue.isPickable = false;
 let strike = 0;
@@ -380,7 +521,7 @@ function selectTip(event: PointerEvent) {
   setTip(2 * (event.clientX - bounds.left) / bounds.width - 1, 1 - 2 * (event.clientY - bounds.top) / bounds.height);
 }
 tip.onpointerdown = event => {
-  if (!event.isPrimary || event.button !== 0 || rolling || strike || strokePointer !== undefined) return;
+  if (!canControl() || !event.isPrimary || event.button !== 0 || rolling || strike || strokePointer !== undefined) return;
   tip.setPointerCapture(event.pointerId);
   selectTip(event);
 };
@@ -388,7 +529,7 @@ tip.onpointermove = event => {
   if (!rolling && !strike && strokePointer === undefined && tip.hasPointerCapture(event.pointerId)) selectTip(event);
 };
 tip.onkeydown = event => {
-  if (rolling || strike || strokePointer !== undefined) return;
+  if (!canControl() || rolling || strike || strokePointer !== undefined) return;
   const offsets: Record<string, [number, number]> = { ArrowLeft: [-0.1, 0], ArrowRight: [0.1, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] };
   const offset = offsets[event.key];
   if (event.key === "Home") setTip(0, 0);
@@ -398,15 +539,27 @@ tip.onkeydown = event => {
 };
 function fire(strength: number) {
   if (rolling || strike) return;
+  if (onlineMode && (!online.active || online.remainingMs() <= 0)) return;
+  if (!snooker && legalTargets().includes(8) && calledPocket === undefined) {
+    status.textContent = 'Call a pocket for the black 8 before shooting.';
+    return;
+  }
+  aimLocked = false;
+  tableStroke = undefined;
+  if (onlineMode && online.seat === 1) {
+    online.send({ type: 'input', input: { action: 'shoot', strength, aim: [aim.x, aim.z], tip: [tipX, tipY], position: [balls[0].x, balls[0].z], calledPocket } });
+    return;
+  }
+  shotWasBreak = breaking;
   placement = undefined;
   firstContact = undefined;
   shotTargets = legalTargets();
   previouslyPocketed = balls.map(ball => ball.pocketed);
-  shotPower = strength;
+  shotPower = Math.max(0, Math.min(1, Number.isFinite(strength) ? strength : 0));
   strike = 0.19;
 }
 stroke.onpointerdown = event => {
-  if (!event.isPrimary || event.button !== 0 || rolling || strike || turn !== 0 || finished) return;
+  if (!event.isPrimary || event.button !== 0 || rolling || strike || !canControl() || finished) return;
   if (strokePointer !== undefined || aimPointer !== undefined) return;
   strokePointer = event.pointerId;
   strokeStart = event.clientX;
@@ -436,24 +589,51 @@ stroke.onlostpointercapture = event => {
 };
 let aimPointer: number | undefined;
 let movingCueBall = false;
+let aimLocked = false;
+let lastCueTap = 0;
+let tableStroke: { x: number; y: number; dx: number; dy: number } | undefined;
 let viewMode = false;
 const viewToggle = document.querySelector<HTMLButtonElement>('#viewMode')!;
+const lockButton = document.querySelector<HTMLButtonElement>('#lockAim')!;
+const pocketChoice = document.querySelector<HTMLSelectElement>('#pocketChoice')!;
+pocketChoice.onchange = () => {
+  if (!canControl() || rolling || strike || !legalTargets().includes(8)) return;
+  calledPocket = pocketChoice.value === '' ? undefined : Number(pocketChoice.value);
+  showReadyStatus();
+};
+function toggleAimLock() {
+  if (!canControl() || rolling || strike || finished || viewMode) return;
+  aimLocked = !aimLocked;
+  lastCueTap = 0;
+  tableStroke = undefined;
+  clearStroke();
+  showReadyStatus();
+}
+lockButton.onclick = toggleAimLock;
 
 function showReadyStatus() {
   if (finished) {
-    status.textContent = !versusComputer ? "Table cleared. Re-rack to play again." :
-      scores[0] === scores[1] ? "Match drawn." : scores[0] > scores[1] ? "You win!" : "Computer wins.";
+    status.textContent = !snooker && winner !== undefined ? playerName(winner) + ' wins! Re-rack to play again.' :
+      scores[0] === scores[1] ? 'Match drawn.' : playerName(scores[0] > scores[1] ? 0 : 1) + ' wins!';
     return;
   }
-  if (turn === 1) {
-    status.textContent = "Computer is lining up a shot.";
+  if (!canControl()) {
+    status.textContent = onlineMode ? online.active ? playerName(turn) + ' is lining up a shot.' : 'Online game paused. Reconnect or leave through Profile.' : 'Computer is lining up a shot.';
+    return;
+  }
+  if (aimLocked && !viewMode) {
+    status.textContent = 'Aim locked · Drag back on the table and release to shoot. Double-tap the cue ball to unlock.';
+    return;
+  }
+  if (!snooker && legalTargets().includes(8) && calledPocket === undefined) {
+    status.textContent = 'Black 8 · Choose a pocket on the table or in the controls before shooting.';
     return;
   }
   if (placement && !viewMode) {
     status.textContent = placement === 'break' ? 'Drag the cue ball behind the head string. Aim on the cloth.' : 'Ball in hand. Drag the cue ball or aim on the cloth.';
     return;
   }
-  status.textContent = viewMode ? 'Drag to orbit. Pinch or scroll to zoom.' : 'Tap or drag on the table to aim.';
+  status.textContent = viewMode ? 'Drag to orbit. Pinch or scroll to zoom.' : playerName(turn) + ' to shoot · Aim, then double-tap the cue ball to lock.';
 }
 
 viewToggle.onclick = () => {
@@ -461,13 +641,19 @@ viewToggle.onclick = () => {
   viewMode = !viewMode;
   viewToggle.textContent = viewMode ? 'View on' : 'View off';
   viewToggle.setAttribute('aria-pressed', String(viewMode));
-  if (viewMode) camera.attachControl(canvas, true);
-  else camera.detachControl();
+  if (viewMode) {
+    camera.mode = Camera.PERSPECTIVE_CAMERA;
+    camera.fov = zoomFov();
+    camera.attachControl(canvas, true);
+  } else {
+    camera.detachControl();
+    fitOverheadCamera();
+  }
   if (!rolling && !strike) showReadyStatus();
 };
 
 function aimAtPointer(event: PointerEvent, starting = false) {
-  if (viewMode || rolling || strike || turn !== 0 || finished || strokePointer !== undefined) return;
+  if (aimLocked || viewMode || rolling || strike || !canControl() || finished || strokePointer !== undefined) return;
   const bounds = canvas.getBoundingClientRect();
   const hit = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
   if (!hit) return;
@@ -490,18 +676,60 @@ function aimAtPointer(event: PointerEvent, starting = false) {
 }
 
 canvas.addEventListener('pointerdown', event => {
-  if (viewMode || !event.isPrimary || event.button !== 0 || rolling || strike) return;
+  if (viewMode || !canControl() || finished || strokePointer !== undefined || !event.isPrimary || event.button !== 0 || rolling || strike) return;
+  const bounds = canvas.getBoundingClientRect();
+  if (!snooker && legalTargets().includes(8)) {
+    const selected = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => pocketSelectors.some(selector => selector === mesh));
+    if (selected?.pickedMesh) {
+      calledPocket = pocketSelectors.findIndex(selector => selector === selected.pickedMesh);
+      showReadyStatus();
+      return;
+    }
+  }
+  const hit = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
+  const cueTap = hit && Math.hypot(hit.x - balls[0].x, hit.z - balls[0].z) < 2.5 * radius;
+  if (cueTap && event.timeStamp - lastCueTap < 350 && lastCueTap > 0) {
+    toggleAimLock();
+    return;
+  }
+  lastCueTap = cueTap ? event.timeStamp : 0;
   aimPointer = event.pointerId;
   canvas.setPointerCapture(event.pointerId);
   movingCueBall = false;
+  if (aimLocked) {
+    const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+    const origin = new Vector3(balls[0].x, radius, balls[0].z);
+    const from = Vector3.Project(origin, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+    const to = Vector3.Project(origin.add(aim), Matrix.Identity(), scene.getTransformMatrix(), viewport);
+    const dx = (to.x - from.x) * bounds.width / engine.getRenderWidth();
+    const dy = (to.y - from.y) * bounds.height / engine.getRenderHeight();
+    const magnitude = Math.max(1, Math.hypot(dx, dy));
+    tableStroke = { x: event.clientX, y: event.clientY, dx: dx / magnitude, dy: dy / magnitude };
+    return;
+  }
   aimAtPointer(event, true);
 });
+function updateTablePull(event: PointerEvent) {
+  if (!tableStroke) return;
+  pull = Math.max(0, Math.min(1, -((event.clientX - tableStroke.x) * tableStroke.dx + (event.clientY - tableStroke.y) * tableStroke.dy) / 110));
+  showPull();
+}
 canvas.addEventListener('pointermove', event => {
-  if (aimPointer === event.pointerId) aimAtPointer(event);
+  if (aimPointer !== event.pointerId) return;
+  if (tableStroke) updateTablePull(event);
+  else aimAtPointer(event);
 });
 canvas.addEventListener('pointerup', event => {
   if (aimPointer !== event.pointerId) return;
   aimPointer = undefined;
+  if (tableStroke) {
+    updateTablePull(event);
+    const strength = pull;
+    tableStroke = undefined;
+    clearStroke();
+    if (strength >= 0.08) fire(strength);
+    return;
+  }
   aimAtPointer(event);
   movingCueBall = false;
 });
@@ -509,17 +737,36 @@ canvas.addEventListener('lostpointercapture', event => {
   if (aimPointer !== event.pointerId) return;
   aimPointer = undefined;
   movingCueBall = false;
+  tableStroke = undefined;
+  clearStroke();
 });
 
 document.querySelector<HTMLButtonElement>('#camera')!.onclick = event => {
   overhead = !overhead;
   cameraTarget = overhead ? 0.025 : 0.83;
+  if (overhead) fitOverheadCamera();
+  else {
+    camera.mode = Camera.PERSPECTIVE_CAMERA;
+    camera.fov = zoomFov();
+  }
   (event.currentTarget as HTMLButtonElement).textContent = overhead ? 'Perspective' : 'Overhead';
 };
 function resetMatch() {
   balls = rack(snooker);
   turn = 0;
   scores = [0, 0];
+  groups = [null, null];
+  winner = undefined;
+  breaking = true;
+  calledPocket = undefined;
+  shotWasBreak = false;
+  firstContact = undefined;
+  shotTargets = [];
+  previouslyPocketed = [];
+  shotPower = 0;
+  aimLocked = false;
+  lastCueTap = 0;
+  tableStroke = undefined;
   finished = colourAfterRed = false;
   cpuWait = 0;
   setTip(0, 0);
@@ -544,6 +791,9 @@ function resetMatch() {
   });
 }
 document.querySelector<HTMLButtonElement>('#reset')!.onclick = resetMatch;
+document.querySelector<HTMLButtonElement>('#noticeRematch')!.onclick = () => {
+  if (!onlineMode || online.active && online.seat === 0) resetMatch();
+};
 document.querySelector<HTMLButtonElement>('#openSettings')!.onclick = () => {
   select('game').value = snooker ? 'snooker' : 'pool';
   select('opponent').value = versusComputer ? 'computer' : 'solo';
@@ -552,6 +802,7 @@ document.querySelector<HTMLButtonElement>('#openSettings')!.onclick = () => {
 settings.addEventListener('close', () => {
   if (settings.returnValue !== 'start') return;
   settings.returnValue = '';
+  if (onlineMode) { online.leave(); onlineMode = false; }
   snooker = select('game').value === 'snooker';
   versusComputer = select('opponent').value === 'computer';
   resetMatch();
@@ -579,8 +830,150 @@ select('tableStyle').onchange = () => {
   rubber.diffuseColor = Color3.FromHexString(cushion);
   wood.diffuseColor = Color3.FromHexString(rail);
 };
+function gameState(): SavedGame {
+  return { version: 1, balls, snooker, versusComputer, onlineMode, turn, scores, groups, winner, breaking, shotWasBreak,
+    colourAfterRed, finished, firstContact, shotTargets, previouslyPocketed, rolling, placement, aim: [aim.x, aim.z],
+    strike, shotPower, tip: [tipX, tipY], aimLocked, calledPocket };
+}
+function applyGame(s: SavedGame, preserveLocalAim = false) {
+  balls = structuredClone(s.balls);
+  snooker = s.snooker;
+  versusComputer = s.versusComputer;
+  turn = s.turn;
+  scores = [...s.scores];
+  groups = [...s.groups];
+  winner = s.winner;
+  breaking = s.breaking;
+  shotWasBreak = s.shotWasBreak;
+  colourAfterRed = s.colourAfterRed;
+  finished = s.finished;
+  firstContact = s.firstContact;
+  shotTargets = [...s.shotTargets];
+  previouslyPocketed = [...s.previouslyPocketed];
+  rolling = s.rolling;
+  placement = s.placement;
+  strike = s.strike;
+  shotPower = s.shotPower;
+  if (!preserveLocalAim) {
+    aim.set(s.aim[0], 0, s.aim[1]).normalize();
+    setTip(...s.tip);
+    aimLocked = s.aimLocked;
+    calledPocket = s.calledPocket;
+  }
+  if (rolling || strike) aimLocked = false;
+  accumulator = 0;
+  ballMeshes.forEach((mesh, i) => {
+    mesh.isVisible = Boolean(balls[i]) && !balls[i].pocketed;
+    contacts[i].isVisible = Boolean(balls[i]) && !balls[i].pocketed;
+    if (!balls[i]) return;
+    mesh.material = snooker && i > 0 ? i <= 15 ? redFinish : colourFinishes[i - 16] : poolFinishes[i];
+    mesh.position.set(balls[i].x, balls[i].pocketed ? -0.12 : radius, balls[i].z);
+  });
+  showScore();
+  if (!rolling && !strike) showReadyStatus();
+  else status.textContent = 'Balls in motion';
+}
+function saveGame() {
+  try { localStorage.setItem('billiard-game-v1', JSON.stringify(gameState())); } catch {}
+}
+online.onPaired = resume => {
+  onlineMode = true;
+  versusComputer = false;
+  snooker = false;
+  if (validGame(resume)) applyGame(resume);
+  else resetMatch();
+};
+online.onProfile = showScore;
+online.onTimeout = expiredTurn => {
+  if (!onlineMode || online.seat !== 0 || !online.active || turn !== expiredTurn || rolling || strike || finished) return;
+  turn = 1 - turn;
+  calledPocket = undefined;
+  aimLocked = false;
+  tableStroke = undefined;
+  clearStroke();
+  placement = 'foul';
+  showScore();
+  showReadyStatus();
+  online.send({ type: 'state', state: gameState() });
+  saveGame();
+};
+online.onState = value => {
+  if (!onlineMode || online.seat !== 1 || !validGame(value)) return;
+  const keepAim = canControl() && !value.rolling && !value.strike && turn === value.turn;
+  applyGame(value, keepAim);
+};
+online.onInput = value => {
+  if (!onlineMode || online.seat !== 0 || turn !== 1 || rolling || strike || finished || !value || typeof value !== 'object') return;
+  const input = value as { action?: string; strength?: number; aim?: number[]; tip?: number[]; position?: number[]; calledPocket?: number };
+  const pair = (v: unknown): v is number[] => Array.isArray(v) && v.length === 2 && v.every(n => typeof n === 'number' && Number.isFinite(n));
+  if (!pair(input.aim) || !pair(input.tip) || !pair(input.position)) return;
+  const direction = new Vector3(input.aim[0], 0, input.aim[1]);
+  if (direction.lengthSquared() < 0.5 || direction.lengthSquared() > 1.5) return;
+  aim = direction.normalize();
+  setTip(input.tip[0], input.tip[1]);
+  if (!snooker && legalTargets().includes(8)) {
+    calledPocket = Number.isInteger(input.calledPocket) && input.calledPocket! >= 0 && input.calledPocket! < 6 ? input.calledPocket : undefined;
+  }
+  if (placement) {
+    const [x, z] = input.position;
+    const legal = Math.abs(x) <= width / 2 - radius && Math.abs(z) <= length / 2 - radius &&
+      (placement !== 'break' || z <= -length / 4) &&
+      !pockets.some(p => Math.hypot(p.x - x, p.z - z) < 0.085) &&
+      !balls.slice(1).some(b => !b.pocketed && Math.hypot(b.x - x, b.z - z) < 2 * radius + 0.001);
+    if (legal) Object.assign(balls[0], { x, z });
+  }
+  if (input.action === 'shoot' && typeof input.strength === 'number' && Number.isFinite(input.strength) && input.strength >= 0.08 && input.strength <= 1) fire(input.strength);
+};
+online.onEnded = () => {
+  if (!onlineMode) return;
+  clearStroke();
+  tableStroke = undefined;
+  aimPointer = undefined;
+  if (online.seat === undefined) { onlineMode = false; resetMatch(); }
+  else showReadyStatus();
+};
+try {
+  const saved: unknown = JSON.parse(localStorage.getItem('billiard-game-v1') ?? 'null');
+  if (validGame(saved)) {
+    onlineMode = saved.onlineMode;
+    applyGame(saved);
+    if (onlineMode) online.open();
+  }
+} catch {}
+window.addEventListener('pagehide', saveGame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
 showScore();
 showReadyStatus();
+
+function fitOverheadCamera() {
+  if (!overhead || viewMode) return;
+  const bounds = canvas.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const header = document.querySelector('header')!.getBoundingClientRect();
+  document.documentElement.style.setProperty('--notice-top', header.bottom + 8 + 'px');
+  const footer = document.querySelector('footer')!.getBoundingClientRect();
+  // Phones keep the long axis vertical, including when held sideways.
+  const mobile = window.matchMedia('(max-width: 600px), (pointer: coarse) and (max-height: 600px)').matches;
+  const landscape = !mobile && bounds.width > bounds.height;
+  const top = header.bottom - bounds.top + 6;
+  const bottom = footer.top - bounds.top - 6;
+  const availableHeight = Math.max(1, bottom - top);
+  const availableWidth = Math.max(1, bounds.width - 16);
+  const tableWidth = (landscape ? length : width) + 0.27;
+  const tableHeight = (landscape ? width : length) + 0.27;
+  const unitsPerPixel = Math.max(tableWidth / availableWidth, tableHeight / availableHeight) / cameraZoom;
+  const centerY = (top + bottom) / 2;
+  // Orthographic framing fills the usable area without perspective shrinkage.
+  camera.mode = Camera.ORTHOGRAPHIC_CAMERA;
+  camera.alpha = landscape ? 0 : -Math.PI / 2;
+  camera.beta = 0.025;
+  camera.radius = 2.5;
+  cameraTarget = undefined;
+  camera.orthoLeft = -bounds.width * unitsPerPixel / 2;
+  camera.orthoRight = bounds.width * unitsPerPixel / 2;
+  camera.orthoTop = centerY * unitsPerPixel;
+  camera.orthoBottom = -(bounds.height - centerY) * unitsPerPixel;
+}
 
 function resize() {
   const scales: Record<string, number> = { Low: 0.65, Medium: 0.85, High: 1, Ultra: 1.5 };
@@ -590,47 +983,90 @@ function resize() {
   shadows.mapSize = shadowSize;
   engine.setHardwareScalingLevel(1 / Math.min(scales[quality.value], window.devicePixelRatio || 1));
   engine.resize();
+  fitOverheadCamera();
 }
 quality.onchange = resize;
 new ResizeObserver(resize).observe(canvas);
+const controlsObserver = new ResizeObserver(fitOverheadCamera);
+controlsObserver.observe(document.querySelector('header')!);
+controlsObserver.observe(document.querySelector('footer')!);
 resize();
 
+let networkElapsed = 0, saveElapsed = 0;
+let noticeKey = '';
+const notice = document.querySelector<HTMLElement>('#gameNotice')!;
+function updateGameNotice() {
+  const kind = finished ? 'win' : placement && !rolling && !strike ? 'hand' : '';
+  const winningPlayer = winner ?? (scores[0] === scores[1] ? undefined : scores[0] > scores[1] ? 0 : 1);
+  const key = [kind, turn, winningPlayer, online.active, online.seat, playerName(0), playerName(1), placement].join(':');
+  if (key === noticeKey) return;
+  noticeKey = key;
+  notice.hidden = !kind;
+  notice.dataset.kind = kind;
+  const rematch = document.querySelector<HTMLButtonElement>('#noticeRematch')!;
+  rematch.hidden = kind !== 'win' || onlineMode && online.seat !== 0;
+  rematch.disabled = onlineMode && !online.active;
+  document.querySelector<HTMLElement>('#noticeLabel')!.textContent = kind === 'win' ? 'GAME OVER' : placement === 'break' ? 'BREAK SETUP' : 'BALL IN HAND';
+  document.querySelector<HTMLElement>('#noticeTitle')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'Match drawn' : playerName(winningPlayer) + ' wins!' : playerName(turn) + ' · Ball in hand';
+  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = kind === 'win' ? onlineMode && online.seat !== 0 ? 'Waiting for the host to start the next game.' : 'Ready for another game?' : canControl() ? placement === 'break' ? 'Drag the highlighted cue ball behind the head string.' : 'Drag the highlighted cue ball to place it.' : 'Your opponent is placing the cue ball.';
+}
 engine.runRenderLoop(() => {
-  stroke.disabled = rolling || strike > 0 || turn !== 0 || finished;
+  updateGameNotice();
+  handRing.isVisible = Boolean(placement) && !finished && !rolling && !strike;
+  handRing.position.set(balls[0].x, 0.004, balls[0].z);
+  const clock = document.querySelector<HTMLElement>('#shotClock')!;
+  clock.hidden = !onlineMode;
+  clock.textContent = finished ? 'Finished' : !online.active ? 'Paused' : rolling || strike ? 'In motion' : Math.ceil(online.remainingMs() / 1000) + 's';
+  clock.classList.toggle('urgent', online.active && !rolling && !strike && online.remainingMs() <= 10000);
+  const callEligible = !snooker && !finished && !rolling && !strike && legalTargets().includes(8);
+  document.querySelector<HTMLElement>('#callPocket')!.hidden = !callEligible || !canControl();
+  pocketChoice.value = calledPocket === undefined ? '' : String(calledPocket);
+  pocketSelectors.forEach((mesh, index) => {
+    mesh.setEnabled(callEligible && canControl() && !viewMode);
+    pocketCallRings[index].isVisible = callEligible;
+    pocketCallRings[index].scaling.setAll(index === calledPocket ? 1.12 : 1);
+    pocketCallRings[index].visibility = index === calledPocket ? 1 : 0.35;
+  });
+  stroke.disabled = rolling || strike > 0 || !canControl() || finished;
+  tip.disabled = stroke.disabled;
+  lockButton.disabled = stroke.disabled || viewMode;
+  lockButton.textContent = aimLocked ? 'Unlock aim' : 'Lock aim';
+  lockButton.setAttribute('aria-pressed', String(aimLocked));
+  document.querySelector<HTMLButtonElement>('#reset')!.disabled = onlineMode && (online.seat !== 0 || !online.active);
   const dt = Math.min(engine.getDeltaTime() / 1000, 0.05);
+  const authoritative = !onlineMode || online.active && online.seat === 0;
   const cueBall = balls[0];
-  if (turn === 1 && !finished && !rolling && !strike && !settings.open) {
+  if (versusComputer && !onlineMode && turn === 1 && !finished && !rolling && !strike && !settings.open) {
     cpuWait -= dt;
     if (cpuWait <= 0) {
       const shot = chooseShot(balls, legalTargets(), select("difficulty").value);
       if (shot) {
+        if (!snooker && legalTargets().includes(8)) {
+          calledPocket = shot.pocket ?? pockets.reduce((best, p, index) => Math.hypot(p.x - balls[8].x, p.z - balls[8].z) < Math.hypot(pockets[best].x - balls[8].x, pockets[best].z - balls[8].z) ? index : best, 0);
+        }
         aim.set(Math.sin(shot.angle), 0, Math.cos(shot.angle));
         setTip(0, 0);
         fire(shot.power);
       }
     }
   }
-  if (strike) {
+  if (strike && authoritative) {
     strike = Math.max(0, strike - dt);
     if (!strike) {
-      const speed = shotPower * 4.3;
-      cueBall.spinX = aim.x * tipY * speed * 2.3;
-      cueBall.spinZ = aim.z * tipY * speed * 2.3;
-      cueBall.sideSpin = tipX * speed;
-      cueBall.vx = aim.x * speed;
-      cueBall.vz = aim.z * speed;
+      const speed = shotSpeed(shotPower);
+      strikeBall(cueBall, aim.x, aim.z, speed, tipX, tipY);
       rolling = true;
       status.textContent = 'Balls in motion';
     }
   }
-  if (rolling) {
+  if (rolling && authoritative) {
     accumulator += dt;
     while (accumulator >= fixedStep) {
       const contact = step(balls, fixedStep, sound.queue);
       firstContact ??= contact;
       accumulator -= fixedStep;
     }
-    if (balls.every(ball => ball.vx === 0 && ball.vz === 0)) {
+    if (!balls.some(isMoving)) {
       rolling = false;
       accumulator = 0;
       finishShot();
@@ -649,25 +1085,49 @@ engine.runRenderLoop(() => {
     contacts[index].position.set(ball.x, 0.0008, ball.z);
     contacts[index].isVisible = !ball.pocketed;
   });
-  aimLine.isVisible = !rolling && !strike && !movingCueBall && !finished;
+  aimLine.isVisible = guidesEnabled && !rolling && !strike && !movingCueBall && !finished;
   cue.isVisible = !rolling && !movingCueBall && !finished;
+  objectGuide.isVisible = ghostBall.isVisible = pocketGuide.isVisible = false;
   if (!rolling) {
     const origin = new Vector3(cueBall.x, radius, cueBall.z);
-    const contactOffset = new Vector3(aim.z * tipX, tipY, -aim.x * tipX).scale(radius);
-    cue.position.copyFrom(origin.add(contactOffset).subtract(aim.scale(0.37 + strike * shotPower * 0.9 + pull * 0.16)));
-    cue.rotationQuaternion = Quaternion.RotationAxis(new Vector3(aim.z, 0, -aim.x), Math.PI / 2);
-    const xEdge = aim.x >= 0 ? width / 2 : -width / 2;
-    const zEdge = aim.z >= 0 ? length / 2 : -length / 2;
-    const reach = Math.min(aim.x ? (xEdge - origin.x) / aim.x : Infinity, aim.z ? (zEdge - origin.z) / aim.z : Infinity);
-    MeshBuilder.CreateLines('aim guide', { points: [origin.add(aim.scale(radius)), origin.add(aim.scale(reach))], instance: aimLine });
+    const pose = cuePose(balls, aim.x, aim.z, tipX, tipY, strike * shotPower * 0.9 + pull * 0.16);
+    cue.position.set(pose.center.x, pose.center.y, pose.center.z);
+    const direction = new Vector3(pose.direction.x, pose.direction.y, pose.direction.z);
+    const rotationAxis = Vector3.Cross(Vector3.Up(), direction).normalize();
+    cue.rotationQuaternion = Quaternion.RotationAxis(rotationAxis, Math.acos(direction.y));
+    const guide = traceShot(balls, aim.x, aim.z);
+    MeshBuilder.CreateLines('aim guide', { points: [origin.add(aim.scale(radius)), new Vector3(guide.impact.x, radius, guide.impact.z)], instance: aimLine });
+    if (aimLine.isVisible && guide.objectStart && guide.objectEnd) {
+      objectGuide.isVisible = ghostBall.isVisible = true;
+      ghostBall.position.set(guide.impact.x, 0.004, guide.impact.z);
+      MeshBuilder.CreateDashedLines('object ball path', {points: [new Vector3(guide.objectStart.x, radius, guide.objectStart.z), new Vector3(guide.objectEnd.x, radius, guide.objectEnd.z)], instance: objectGuide});
+      if (guide.pocket) {
+        pocketGuide.isVisible = true;
+        pocketGuide.position.set(guide.pocket.x, 0.035, guide.pocket.z);
+      }
+    }
   }
   if (cameraTarget !== undefined) {
     camera.beta += (cameraTarget - camera.beta) * Math.min(dt * 7, 1);
     if (Math.abs(cameraTarget - camera.beta) < 0.003) cameraTarget = undefined;
   }
   sound.flush();
+  updateSession(dt);
   scene.render();
 });
+
+function updateSession(dt: number) {
+  networkElapsed += dt;
+  saveElapsed += dt;
+  if (networkElapsed >= 0.05) {
+    networkElapsed = 0;
+    if (onlineMode && online.active) {
+      if (online.seat === 0) online.send({ type: 'state', state: gameState() });
+      else if (canControl() && !rolling && !strike) online.send({ type: 'input', input: { action: 'aim', aim: [aim.x, aim.z], tip: [tipX, tipY], position: [balls[0].x, balls[0].z], calledPocket } });
+    }
+  }
+  if (saveElapsed >= 0.5) { saveElapsed = 0; saveGame(); }
+}
 
 
 
