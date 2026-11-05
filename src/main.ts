@@ -589,10 +589,7 @@ ghostBall.isPickable = false;
 const pocketGuide = MeshBuilder.CreateTorus('lined up pocket', {diameter: 0.16, thickness: 0.004, tessellation: 48}, scene);
 pocketGuide.material = ghostBall.material;
 pocketGuide.isPickable = false;
-const handRing = MeshBuilder.CreateTorus('ball in hand indicator', {diameter: radius * 3.4, thickness: 0.003, tessellation: 48}, scene);
-handRing.material = pocketCallMaterial;
-handRing.isPickable = false;
-handRing.isVisible = false;
+const ballHand = document.querySelector<HTMLElement>('#ballHand')!;
 const cue = MeshBuilder.CreateCylinder('cue', { height: cueLength, diameterTop: 0.011, diameterBottom: 0.027, tessellation: 16 }, scene);
 cue.material = material('cue maple', '#cb9358', 0.26);
 cue.isPickable = false;
@@ -701,6 +698,39 @@ let tableStroke: { x: number; y: number; dx: number; dy: number } | undefined;
 let viewMode = false;
 const viewToggle = document.querySelector<HTMLButtonElement>('#viewMode')!;
 const lockButton = document.querySelector<HTMLButtonElement>('#lockAim')!;
+const fineAim = document.querySelector<HTMLButtonElement>('#fineAim')!;
+let fineAimX = 0;
+function canFineAim() {
+  return canControl() && !finished && !rolling && !strike && !viewMode && !aimLocked && strokePointer === undefined;
+}
+function adjustFineAim(degrees: number) {
+  const angle = Math.atan2(aim.x, aim.z) + degrees * Math.PI / 180;
+  aim.set(Math.sin(angle), 0, Math.cos(angle));
+}
+fineAim.onpointerdown = event => {
+  if (!canFineAim() || aimPointer !== undefined || !event.isPrimary || event.button !== 0) return;
+  event.preventDefault();
+  aimPointer = event.pointerId;
+  fineAimX = event.clientX;
+  fineAim.setPointerCapture(event.pointerId);
+};
+fineAim.onpointermove = event => {
+  if (!fineAim.hasPointerCapture(event.pointerId) || aimPointer !== event.pointerId) return;
+  if (canFineAim()) adjustFineAim((event.clientX - fineAimX) * 0.08);
+  fineAimX = event.clientX;
+};
+function endFineAim(event: PointerEvent) {
+  if (aimPointer === event.pointerId) aimPointer = undefined;
+  if (fineAim.hasPointerCapture(event.pointerId)) fineAim.releasePointerCapture(event.pointerId);
+}
+fineAim.onpointerup = endFineAim;
+fineAim.onpointercancel = endFineAim;
+fineAim.onlostpointercapture = endFineAim;
+fineAim.onkeydown = event => {
+  if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || !canFineAim() || aimPointer !== undefined) return;
+  event.preventDefault();
+  adjustFineAim((event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 0.02 : 0.1));
+};
 const pocketChoice = document.querySelector<HTMLSelectElement>('#pocketChoice')!;
 pocketChoice.onchange = () => {
   if (!canControl() || rolling || strike || !legalTargets().includes(8)) return;
@@ -740,7 +770,7 @@ function showReadyStatus() {
     status.textContent = placement === 'break' ? 'Drag the cue ball behind the head string. Aim on the cloth.' : 'Ball in hand. Drag the cue ball or aim on the cloth.';
     return;
   }
-  status.textContent = viewMode ? 'Drag to orbit. Pinch or scroll to zoom.' : playerName(turn) + ' to shoot · Aim, then double-tap the cue ball to lock.';
+  status.textContent = viewMode ? 'Drag to orbit. Pinch or scroll to zoom.' : window.matchMedia('(pointer: coarse)').matches ? playerName(turn) + ' · Tap to aim, slide Fine aim, then pull the cue to shoot.' : playerName(turn) + ' to shoot · Aim, then double-tap the cue ball to lock.';
 }
 
 viewToggle.onclick = () => {
@@ -787,8 +817,10 @@ function tableHit(event: PointerEvent, includeRails = false) {
   return scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
 }
 for (const controlCanvas of [canvas, tvCanvas]) {
+  controlCanvas.addEventListener('contextmenu', event => event.preventDefault());
   controlCanvas.addEventListener('pointerdown', event => {
-    if (viewMode || !canControl() || finished || strokePointer !== undefined || !event.isPrimary || event.button !== 0 || rolling || strike) return;
+    if (viewMode || !canControl() || finished || strokePointer !== undefined || aimPointer !== undefined || !event.isPrimary || event.button !== 0 || rolling || strike) return;
+    event.preventDefault();
     const bounds = controlCanvas.getBoundingClientRect();
     if (!snooker && legalTargets().includes(8)) {
       if (uses2dTable()) {
@@ -1306,7 +1338,7 @@ function celebrateWin() {
   confettiCleanup = window.setTimeout(() => confetti.replaceChildren(), 4600);
 }
 function updateGameNotice() {
-  const kind = finished ? 'win' : placement && !rolling && !strike ? 'hand' : '';
+  const kind = finished ? 'win' : '';
   const winningPlayer = winner ?? (scores[0] === scores[1] ? undefined : scores[0] > scores[1] ? 0 : 1);
   const key = [kind, turn, winningPlayer, online.active, online.seat, playerName(0), playerName(1), placement, tvEnabled].join(':');
   if (key === noticeKey) return;
@@ -1325,15 +1357,13 @@ function updateGameNotice() {
   const rematch = document.querySelector<HTMLButtonElement>('#noticeRematch')!;
   rematch.hidden = kind !== 'win' || onlineMode && online.seat !== 0;
   rematch.disabled = onlineMode && !online.active;
-  document.querySelector<HTMLElement>('#noticeLabel')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'HONOURS EVEN' : 'VICTORY' : placement === 'break' ? 'BREAK SETUP' : 'BALL IN HAND';
-  document.querySelector<HTMLElement>('#noticeTitle')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'Match drawn' : playerName(winningPlayer) + ' wins!' : playerName(turn) + ' · Ball in hand';
-  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = kind === 'win' ? onlineMode && online.seat !== 0 ? 'What a game! Waiting for the host to start the next round.' : winningPlayer === undefined ? 'A close match. Time for a rematch?' : 'What a finish. Ready for another round?' : canControl() ? tvEnabled ? 'Use the arrows to place the cue ball, then press OK.' : placement === 'break' ? 'Drag the highlighted cue ball behind the head string.' : 'Drag the highlighted cue ball to place it.' : 'Your opponent is placing the cue ball.';
+  document.querySelector<HTMLElement>('#noticeLabel')!.textContent = winningPlayer === undefined ? 'HONOURS EVEN' : 'VICTORY';
+  document.querySelector<HTMLElement>('#noticeTitle')!.textContent = winningPlayer === undefined ? 'Match drawn' : playerName(winningPlayer) + ' wins!';
+  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = onlineMode && online.seat !== 0 ? 'What a game! Waiting for the host to start the next round.' : winningPlayer === undefined ? 'A close match. Time for a rematch?' : 'What a finish. Ready for another round?';
 }
 engine.runRenderLoop(() => {
   updateTvControls();
   updateGameNotice();
-  handRing.isVisible = Boolean(placement) && !finished && !rolling && !strike;
-  handRing.position.set(balls[0].x, 0.004, balls[0].z);
   const clock = document.querySelector<HTMLElement>('#shotClock')!;
   clock.hidden = !onlineMode;
   clock.textContent = finished ? 'Finished' : !online.active ? 'Paused' : rolling || strike ? 'In motion' : Math.ceil(online.remainingMs() / 1000) + 's';
@@ -1350,6 +1380,7 @@ engine.runRenderLoop(() => {
   stroke.disabled = rolling || strike > 0 || !canControl() || finished;
   tip.disabled = stroke.disabled;
   lockButton.disabled = stroke.disabled || viewMode;
+  fineAim.disabled = !canFineAim();
   lockButton.querySelector<HTMLElement>('.hud-label')!.textContent = aimLocked ? 'Locked' : 'Aim lock';
   lockButton.setAttribute('aria-label', aimLocked ? 'Unlock aim' : 'Lock aim');
   lockButton.setAttribute('aria-pressed', String(aimLocked));
@@ -1443,6 +1474,16 @@ engine.runRenderLoop(() => {
     pull: strike ? strike * shotPower * 5 : tvEnabled ? remote.stage === 'power' ? remote.power : 0 : pull,
   });
   else scene.render();
+  ballHand.hidden = !placement || finished || rolling || strike > 0;
+  if (!ballHand.hidden) {
+    const bounds = activeTableCanvas().getBoundingClientRect();
+    const point = uses2dTable() ? tvTable!.project(balls[0].x, balls[0].z) : Vector3.Project(
+      new Vector3(balls[0].x, radius * 2, balls[0].z), Matrix.Identity(), scene.getTransformMatrix(),
+      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    if ('z' in point && (Number(point.z) < 0 || Number(point.z) > 1)) ballHand.hidden = true;
+    ballHand.style.left = bounds.left + point.x * (uses2dTable() ? 1 : bounds.width / engine.getRenderWidth()) + 'px';
+    ballHand.style.top = bounds.top + point.y * (uses2dTable() ? 1 : bounds.height / engine.getRenderHeight()) + 'px';
+  }
 });
 
 function updateSession(dt: number) {

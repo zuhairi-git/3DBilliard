@@ -118,7 +118,6 @@ export class TvTable {
     }
     const cue = state.balls[0];
     if (!state.rolling && !state.finished) {
-      if (state.placement) circle(cue.x, cue.z, radius * 1.65, '#ffffff12', '#ffe3a1');
       if (state.guides) {
         const guide = traceShot(state.balls, state.aim.x, state.aim.z);
         ctx.setLineDash([scale * 0.018, scale * 0.015]);

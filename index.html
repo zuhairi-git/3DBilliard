@@ -38,6 +38,9 @@
     <div class="ui-dialog-actions"><form method="dialog"><button class="ui-button ui-button--primary" value="close">Back to game</button></form></div>
   </dialog>
   <main><canvas id="table" aria-label="3D pool table"></canvas><canvas id="tvTable" aria-label="TV pool table, overhead view" hidden></canvas></main>
+  <div id="ballHand" role="img" aria-label="Ball in hand: move the cue ball" hidden>
+    <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M11 19V6a2 2 0 0 1 4 0v9-11a2 2 0 0 1 4 0v11-9a2 2 0 0 1 4 0v10-6a2 2 0 0 1 4 0v14c0 6-4 10-10 10h-1c-4 0-6-2-8-5l-5-8c-2-3 1-5 3-3l5 5Z"/></svg>
+  </div>
   <dialog class="ui-dialog tv-detection" id="tvDetection" aria-labelledby="tvDetectionTitle" aria-describedby="tvDetectionDescription">
     <div class="dialog-body">
     <div class="settings-heading"><span class="eyebrow">WELCOME TO THE TABLE</span><h2 id="tvDetectionTitle">Playing on a TV?</h2></div>
@@ -67,6 +70,7 @@
       <button class="ui-button" id="tvMenu" type="button">Menu</button>
     </div>
     <div class="call-pocket" id="callPocket" hidden><label for="pocketChoice">Black 8 · Call pocket</label><select class="ui-select" id="pocketChoice"><option value="">Choose on the table…</option><option value="0">Head · left</option><option value="1">Middle · left</option><option value="2">Foot · left</option><option value="3">Head · right</option><option value="4">Middle · right</option><option value="5">Foot · right</option></select></div>
+    <div class="fine-aim"><span class="control-label">Fine aim</span><button id="fineAim" class="ui-button" type="button" aria-label="Fine aim. Drag left or right, or use arrow keys to adjust."><span aria-hidden="true">‹<span class="aim-ruler"></span>›</span></button><small>Slide to adjust</small></div>
     <button class="ui-button hud-action" id="lockAim" type="button" aria-pressed="false" title="Lock aim to pull back and shoot on the table"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/><circle cx="12" cy="12" r="2"/></svg><span class="hud-label">Aim lock</span></button>
     <div class="contact">
       <span class="control-label">Spin</span>
