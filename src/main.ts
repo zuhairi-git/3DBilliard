@@ -16,6 +16,82 @@ import { isMoving, length, pockets, rack, radius, shotSpeed, step, strikeBall, w
 const canvas = document.querySelector<HTMLCanvasElement>('#table')!;
 const status = document.querySelector<HTMLElement>('#status')!;
 const quality = document.querySelector<HTMLSelectElement>('#quality')!;
+const mobileMenu = document.querySelector<HTMLButtonElement>('#mobileMenu')!;
+const tableActions = document.querySelector<HTMLElement>('#tableActions')!;
+const hudHeader = document.querySelector<HTMLElement>('header')!;
+const menuDialog = document.querySelector<HTMLDialogElement>('#mobileGameMenu')!;
+const menuActions = document.querySelector<HTMLElement>('#gameMenuActions')!;
+const mobileLayout = window.matchMedia('(max-width: 600px)');
+const actionDescriptions: Record<string, string> = {
+  viewMode: 'Look around the table',
+  camera: 'Switch between top-down and 3D',
+  reset: 'Set up a fresh game',
+  openOnline: 'Your profile, QR code & online play',
+  openSettings: 'Game, equipment, sound & guides',
+};
+for (const button of tableActions.querySelectorAll<HTMLButtonElement>('button')) {
+  const description = document.createElement('span');
+  description.className = 'menu-description';
+  description.textContent = actionDescriptions[button.id];
+  button.append(description);
+}
+function setMobileMenu(open: boolean, restoreFocus = false) {
+  open = open && mobileLayout.matches;
+  if (open && !menuDialog.open) {
+    menuActions.append(tableActions);
+    menuDialog.showModal();
+  } else if (!open) {
+    if (menuDialog.open) menuDialog.close();
+    menuDialog.classList.remove('modal-parent');
+    delete menuDialog.dataset.activeChild;
+    if (tableActions.parentElement !== hudHeader) hudHeader.append(tableActions);
+  }
+  hudHeader.dataset.menuOpen = String(open);
+  mobileMenu.setAttribute('aria-expanded', String(open));
+  mobileMenu.setAttribute('aria-label', open ? 'Close game menu' : 'Open game menu');
+  if (restoreFocus && !document.querySelector('dialog[open]')) mobileMenu.focus();
+}
+mobileMenu.onclick = () => setMobileMenu(!menuDialog.open);
+tableActions.addEventListener('click', event => {
+  const button = (event.target as Element).closest('button');
+  if (!menuDialog.open || !button || button.disabled) return;
+  const childId = button.id === 'openSettings' ? 'settings' : button.id === 'openOnline' ? 'online' : button.id === 'reset' && needsRerackConfirmation() ? 'rerackConfirm' : undefined;
+  if (childId) {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      button.animate([
+        { transform: 'translateY(0) scale(1)' },
+        { transform: 'translateY(2px) scale(.985)', offset: 0.35 },
+        { transform: 'translateY(0) scale(1)' },
+      ], { duration: 180, easing: 'ease-out' });
+    }
+    menuDialog.dataset.activeChild = childId;
+    menuDialog.classList.add('modal-parent');
+    document.getElementById(childId)!.classList.add('modal-child');
+  } else setMobileMenu(false);
+}, true);
+for (const child of document.querySelectorAll<HTMLDialogElement>('#settings, #online, #rerackConfirm')) {
+  child.addEventListener('close', () => {
+    child.classList.remove('modal-child');
+    if (menuDialog.dataset.activeChild !== child.id) return;
+    menuDialog.classList.remove('modal-parent');
+    delete menuDialog.dataset.activeChild;
+    if (child.id === 'settings' && child.returnValue === 'start' || child.id === 'rerackConfirm' && child.returnValue === 'rerack') setMobileMenu(false);
+  });
+}
+document.querySelector<HTMLButtonElement>('#closeGameMenu')!.onclick = () => setMobileMenu(false, true);
+menuDialog.addEventListener('cancel', event => {
+  event.preventDefault();
+  setMobileMenu(false, true);
+});
+menuDialog.addEventListener('close', () => {
+  if (!menuDialog.open) setMobileMenu(false);
+});
+menuDialog.addEventListener('click', event => {
+  if (event.target !== menuDialog) return;
+  const bounds = menuDialog.getBoundingClientRect();
+  if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) setMobileMenu(false, true);
+});
+mobileLayout.addEventListener('change', () => setMobileMenu(false));
 const zoomSlider = document.querySelector<HTMLInputElement>('#cameraZoom')!;
 const zoomFit = document.querySelector<HTMLButtonElement>('#zoomFit')!;
 let cameraZoom = 1;
@@ -381,7 +457,12 @@ function showScore() {
         const badge = document.createElement('span');
         badge.className = 'score-ball ' + (ball.potted ? 'achieved' : 'pending') + (ball.number > 8 ? ' stripe' : '');
         badge.style.setProperty('--ball-color', palette[(ball.number - 1) % 8]);
-        badge.textContent = String(ball.number);
+        if (ball.number > 8) {
+          const number = document.createElement('span');
+          number.className = 'ball-number';
+          number.textContent = String(ball.number);
+          badge.append(number);
+        } else badge.textContent = String(ball.number);
         badge.title = 'Ball ' + ball.number + (ball.potted ? ' · pocketed' : ' · on table');
         badge.setAttribute('aria-label', badge.title);
         tray.append(badge);
@@ -639,7 +720,7 @@ function showReadyStatus() {
 viewToggle.onclick = () => {
 
   viewMode = !viewMode;
-  viewToggle.textContent = viewMode ? 'View on' : 'View off';
+  viewToggle.querySelector<HTMLElement>('.hud-label')!.textContent = viewMode ? 'Orbit on' : 'Orbit';
   viewToggle.setAttribute('aria-pressed', String(viewMode));
   if (viewMode) {
     camera.mode = Camera.PERSPECTIVE_CAMERA;
@@ -749,7 +830,9 @@ document.querySelector<HTMLButtonElement>('#camera')!.onclick = event => {
     camera.mode = Camera.PERSPECTIVE_CAMERA;
     camera.fov = zoomFov();
   }
-  (event.currentTarget as HTMLButtonElement).textContent = overhead ? 'Perspective' : 'Overhead';
+  const button = event.currentTarget as HTMLButtonElement;
+  button.querySelector<HTMLElement>('.hud-label')!.textContent = overhead ? '3D view' : 'Top view';
+  button.setAttribute('aria-label', overhead ? 'Switch to perspective view' : 'Switch to top-down view');
 };
 function resetMatch() {
   balls = rack(snooker);
@@ -790,7 +873,22 @@ function resetMatch() {
     mesh.rotationQuaternion = Quaternion.Identity();
   });
 }
-document.querySelector<HTMLButtonElement>('#reset')!.onclick = resetMatch;
+function needsRerackConfirmation() {
+  return !finished && (!breaking || rolling || strike > 0);
+}
+const rerackDialog = document.querySelector<HTMLDialogElement>('#rerackConfirm')!;
+document.querySelector<HTMLButtonElement>('#reset')!.onclick = () => {
+  if (onlineMode && (online.seat !== 0 || !online.active)) return;
+  if (needsRerackConfirmation()) {
+    rerackDialog.returnValue = '';
+    rerackDialog.showModal();
+  } else resetMatch();
+};
+rerackDialog.addEventListener('close', () => {
+  if (rerackDialog.returnValue !== 'rerack') return;
+  rerackDialog.returnValue = '';
+  if (!onlineMode || online.seat === 0 && online.active) resetMatch();
+});
 document.querySelector<HTMLButtonElement>('#noticeRematch')!.onclick = () => {
   if (!onlineMode || online.active && online.seat === 0) resetMatch();
 };
@@ -877,6 +975,7 @@ function saveGame() {
   try { localStorage.setItem('billiard-game-v1', JSON.stringify(gameState())); } catch {}
 }
 online.onPaired = resume => {
+  setMobileMenu(false);
   onlineMode = true;
   versusComputer = false;
   snooker = false;
@@ -995,6 +1094,29 @@ resize();
 let networkElapsed = 0, saveElapsed = 0;
 let noticeKey = '';
 const notice = document.querySelector<HTMLElement>('#gameNotice')!;
+const confetti = document.querySelector<HTMLElement>('#victoryConfetti')!;
+let celebratedWin = false;
+let confettiCleanup: number | undefined;
+function celebrateWin() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  confetti.replaceChildren();
+  window.clearTimeout(confettiCleanup);
+  const colors = ['#eac16a', '#fff0b7', '#61baa0', '#e29872', '#f5e8ce'];
+  const pieces = document.createDocumentFragment();
+  for (let i = 0; i < 54; i++) {
+    const piece = document.createElement('span');
+    piece.className = 'confetti-piece';
+    piece.style.left = (i / 54 * 100) + '%';
+    piece.style.setProperty('--confetti-color', colors[i % colors.length]);
+    piece.style.setProperty('--fall-time', (2.7 + Math.random() * 1.1) + 's');
+    piece.style.setProperty('--fall-delay', (Math.random() * 0.65) + 's');
+    piece.style.setProperty('--drift', (Math.random() * 140 - 70) + 'px');
+    piece.style.setProperty('--spin', (Math.random() * 900 - 450) + 'deg');
+    pieces.append(piece);
+  }
+  confetti.append(pieces);
+  confettiCleanup = window.setTimeout(() => confetti.replaceChildren(), 4600);
+}
 function updateGameNotice() {
   const kind = finished ? 'win' : placement && !rolling && !strike ? 'hand' : '';
   const winningPlayer = winner ?? (scores[0] === scores[1] ? undefined : scores[0] > scores[1] ? 0 : 1);
@@ -1003,12 +1125,21 @@ function updateGameNotice() {
   noticeKey = key;
   notice.hidden = !kind;
   notice.dataset.kind = kind;
+  notice.dataset.outcome = winningPlayer === undefined ? 'draw' : 'winner';
+  if (kind === 'win' && winningPlayer !== undefined && !celebratedWin) {
+    celebratedWin = true;
+    celebrateWin();
+  } else if (kind !== 'win') {
+    celebratedWin = false;
+    window.clearTimeout(confettiCleanup);
+    confetti.replaceChildren();
+  }
   const rematch = document.querySelector<HTMLButtonElement>('#noticeRematch')!;
   rematch.hidden = kind !== 'win' || onlineMode && online.seat !== 0;
   rematch.disabled = onlineMode && !online.active;
-  document.querySelector<HTMLElement>('#noticeLabel')!.textContent = kind === 'win' ? 'GAME OVER' : placement === 'break' ? 'BREAK SETUP' : 'BALL IN HAND';
+  document.querySelector<HTMLElement>('#noticeLabel')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'HONOURS EVEN' : 'VICTORY' : placement === 'break' ? 'BREAK SETUP' : 'BALL IN HAND';
   document.querySelector<HTMLElement>('#noticeTitle')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'Match drawn' : playerName(winningPlayer) + ' wins!' : playerName(turn) + ' · Ball in hand';
-  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = kind === 'win' ? onlineMode && online.seat !== 0 ? 'Waiting for the host to start the next game.' : 'Ready for another game?' : canControl() ? placement === 'break' ? 'Drag the highlighted cue ball behind the head string.' : 'Drag the highlighted cue ball to place it.' : 'Your opponent is placing the cue ball.';
+  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = kind === 'win' ? onlineMode && online.seat !== 0 ? 'What a game! Waiting for the host to start the next round.' : winningPlayer === undefined ? 'A close match. Time for a rematch?' : 'What a finish. Ready for another round?' : canControl() ? placement === 'break' ? 'Drag the highlighted cue ball behind the head string.' : 'Drag the highlighted cue ball to place it.' : 'Your opponent is placing the cue ball.';
 }
 engine.runRenderLoop(() => {
   updateGameNotice();
@@ -1030,7 +1161,8 @@ engine.runRenderLoop(() => {
   stroke.disabled = rolling || strike > 0 || !canControl() || finished;
   tip.disabled = stroke.disabled;
   lockButton.disabled = stroke.disabled || viewMode;
-  lockButton.textContent = aimLocked ? 'Unlock aim' : 'Lock aim';
+  lockButton.querySelector<HTMLElement>('.hud-label')!.textContent = aimLocked ? 'Locked' : 'Aim lock';
+  lockButton.setAttribute('aria-label', aimLocked ? 'Unlock aim' : 'Lock aim');
   lockButton.setAttribute('aria-pressed', String(aimLocked));
   document.querySelector<HTMLButtonElement>('#reset')!.disabled = onlineMode && (online.seat !== 0 || !online.active);
   const dt = Math.min(engine.getDeltaTime() / 1000, 0.05);
