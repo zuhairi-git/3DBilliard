@@ -1,0 +1,51 @@
+import { shouldAskAboutTv } from './tv-detection';
+import { remoteKey } from './tv-controls';
+import { installDialogFallback } from './tv-dialogs';
+
+async function start() {
+  installDialogFallback();
+  let preference: string | null = null;
+  try { preference = localStorage.getItem('billiard-tv'); } catch {}
+  const url = new URL(location.href);
+  if (url.searchParams.get('table') === '3d') {
+    preference = 'off';
+    document.documentElement.dataset.tvChoice = 'off';
+    url.searchParams.delete('table');
+    try { history.replaceState(null, '', url.href); } catch {}
+  }
+  if (shouldAskAboutTv(navigator.userAgent, preference)) {
+    const dialog = document.querySelector<HTMLDialogElement>('#tvDetection')!;
+    const choices = [...dialog.querySelectorAll<HTMLButtonElement>('button')];
+    await new Promise<void>(resolve => {
+      const choose = (enabled: boolean) => {
+        // The attribute also works if browser storage is unavailable.
+        document.documentElement.dataset.tvChoice = enabled ? 'on' : 'off';
+        try { localStorage.setItem('billiard-tv', enabled ? 'on' : 'off'); } catch {}
+        document.removeEventListener('keydown', navigate, true);
+        dialog.close();
+        resolve();
+      };
+      const navigate = (event: KeyboardEvent) => {
+        const key = remoteKey(event.key, event.keyCode);
+        if (!key) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+        if (key === 'ok') (document.activeElement as HTMLButtonElement)?.click();
+        else if (key === 'back') choose(false);
+        else choices[(choices.indexOf(document.activeElement as HTMLButtonElement) + 1) % choices.length].focus();
+      };
+      choices[0].onclick = () => choose(true);
+      choices[1].onclick = () => choose(false);
+      dialog.addEventListener('cancel', event => { event.preventDefault(); choose(false); }, { once: true });
+      document.addEventListener('keydown', navigate, true);
+      dialog.showModal();
+      choices[0].focus();
+    });
+  }
+  await import('./main');
+}
+
+void start().catch(() => {
+  document.querySelector<HTMLElement>('#status')!.textContent = 'The game could not start. Please reload this page.';
+});

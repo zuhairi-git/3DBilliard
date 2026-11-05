@@ -1,4 +1,6 @@
 import { GameAudio } from './audio';
+import { RemoteShot, remoteKey, remotePlacement, type RemoteKey } from './tv-controls';
+import { TvTable } from './tv-table';
 import { cueLength, cuePose } from './cue-geometry';
 import { traceShot } from './aim-guide';
 import { OnlineGame } from './online';
@@ -6,7 +8,7 @@ import { groupOf, poolTargets, resolvePoolShot, type Groups } from './pool-rules
 import { validGame, type SavedGame } from './saved-game';
 import { constrainOrbit } from './camera-bounds';
 import {
-  ArcRotateCamera, Camera, Color3, Color4, DirectionalLight, DynamicTexture, Engine,
+  ArcRotateCamera, Camera, Color3, Color4, DirectionalLight, DynamicTexture, Engine, NullEngine,
   HemisphericLight, ShadowGenerator, Matrix, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3,
 } from '@babylonjs/core';
 import { furnishRoom } from './room';
@@ -14,6 +16,8 @@ import { chooseShot } from './opponent';
 import { isMoving, length, pockets, rack, radius, shotSpeed, step, strikeBall, width } from './physics';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#table')!;
+const tvCanvas = document.querySelector<HTMLCanvasElement>('#tvTable')!;
+let tvTable: TvTable | undefined;
 const status = document.querySelector<HTMLElement>('#status')!;
 const quality = document.querySelector<HTMLSelectElement>('#quality')!;
 const mobileMenu = document.querySelector<HTMLButtonElement>('#mobileMenu')!;
@@ -22,6 +26,12 @@ const hudHeader = document.querySelector<HTMLElement>('header')!;
 const menuDialog = document.querySelector<HTMLDialogElement>('#mobileGameMenu')!;
 const menuActions = document.querySelector<HTMLElement>('#gameMenuActions')!;
 const mobileLayout = window.matchMedia('(max-width: 600px)');
+let tvEnabled = false;
+const remote = new RemoteShot();
+let tvContext = '';
+let tvPresentation = '';
+try { tvEnabled = localStorage.getItem('billiard-tv') === 'on'; } catch {}
+if (document.documentElement.dataset.tvChoice) tvEnabled = document.documentElement.dataset.tvChoice === 'on';
 const actionDescriptions: Record<string, string> = {
   viewMode: 'Look around the table',
   camera: 'Switch between top-down and 3D',
@@ -36,7 +46,7 @@ for (const button of tableActions.querySelectorAll<HTMLButtonElement>('button'))
   button.append(description);
 }
 function setMobileMenu(open: boolean, restoreFocus = false) {
-  open = open && mobileLayout.matches;
+  open = open && (mobileLayout.matches || tvEnabled);
   if (open && !menuDialog.open) {
     menuActions.append(tableActions);
     menuDialog.showModal();
@@ -158,7 +168,19 @@ soundToggle.onclick = () => {
 volume.oninput = updateSound;
 document.addEventListener('pointerdown', () => { void sound.unlock(); });
 document.addEventListener('keydown', () => { void sound.unlock(); });
-const engine = new Engine(canvas, true);
+let webglUnavailable = false;
+const engine = (() => {
+  // Retain the existing scene's state objects without creating a GPU context on TV.
+  const headless = () => new NullEngine({ renderWidth: 1280, renderHeight: 720, textureSize: 512, deterministicLockstep: false, lockstepMaxSteps: 4 });
+  if (tvEnabled) return headless();
+  try { return new Engine(canvas, true); }
+  catch {
+    webglUnavailable = true;
+    tvEnabled = true;
+    return headless();
+  }
+})();
+const headlessGraphics = engine instanceof NullEngine;
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.045, 0.062, 0.057, 1);
 const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0.025, 2.5, Vector3.Zero(), scene);
@@ -248,10 +270,12 @@ function weave() {
   texture.update();
   return texture;
 }
-cloth.diffuseTexture = weave();
-cloth.bumpTexture = weave();
-cloth.bumpTexture.level = 0.12;
-furnishRoom(scene, wood, brass);
+if (!headlessGraphics) {
+  cloth.diffuseTexture = weave();
+  cloth.bumpTexture = weave();
+  cloth.bumpTexture.level = 0.12;
+  furnishRoom(scene, wood, brass);
+}
 box('floor', 0, -0.79, 0, 15, 0.04, 15, floor);
 box('cabinet', 0, -0.20, 0, width + 0.24, 0.20, length + 0.22, wood);
 box('lower frame', 0, -0.305, 0, width + 0.20, 0.035, length + 0.18, trim);
@@ -339,6 +363,11 @@ const ballMeshes = rack(true).map((_, index) => {
   const mesh = MeshBuilder.CreateSphere('ball ' + index, { diameter: 2 * radius, segments: 24 }, scene);
   shadows.addShadowCaster(mesh);
   const finish = material('polished resin ' + index, '#ffffff', 0.95);
+  mesh.material = finish;
+  mesh.isPickable = false;
+  mesh.rotationQuaternion = Quaternion.Identity();
+  mesh.isVisible = index < 16;
+  if (headlessGraphics) return mesh;
   const texture = new DynamicTexture('ball markings ' + index, { width: 512, height: 256 }, scene, true);
   const ctx = texture.getContext() as CanvasRenderingContext2D;
   ctx.fillStyle = index === 0 || index > 8 ? '#f6eedc' : palette[(index - 1) % 8];
@@ -362,10 +391,6 @@ const ballMeshes = rack(true).map((_, index) => {
   }
   texture.update();
   finish.diffuseTexture = texture;
-  mesh.material = finish;
-  mesh.isPickable = false;
-  mesh.rotationQuaternion = Quaternion.Identity();
-  mesh.isVisible = index < 16;
   return mesh;
 });
 const poolFinishes = ballMeshes.map(mesh => mesh.material);
@@ -693,6 +718,7 @@ function toggleAimLock() {
 lockButton.onclick = toggleAimLock;
 
 function showReadyStatus() {
+  if (tvEnabled) { updateTvControls(); return; }
   if (finished) {
     status.textContent = !snooker && winner !== undefined ? playerName(winner) + ' wins! Re-rack to play again.' :
       scores[0] === scores[1] ? 'Match drawn.' : playerName(scores[0] > scores[1] ? 0 : 1) + ' wins!';
@@ -835,6 +861,7 @@ document.querySelector<HTMLButtonElement>('#camera')!.onclick = event => {
   button.setAttribute('aria-label', overhead ? 'Switch to perspective view' : 'Switch to top-down view');
 };
 function resetMatch() {
+  tvContext = '';
   balls = rack(snooker);
   turn = 0;
   scores = [0, 0];
@@ -877,17 +904,39 @@ function needsRerackConfirmation() {
   return !finished && (!breaking || rolling || strike > 0);
 }
 const rerackDialog = document.querySelector<HTMLDialogElement>('#rerackConfirm')!;
+let pendingSettingsMatch = false;
+function confirmNewGame(fromSettings: boolean) {
+  pendingSettingsMatch = fromSettings;
+  document.querySelector<HTMLElement>('#rerackTitle')!.textContent = fromSettings ? 'Start a new game?' : 'Re-rack this game?';
+  document.querySelector<HTMLElement>('#rerackDescription')!.textContent = fromSettings
+    ? 'A game is in progress. Starting a new game will discard your current progress and use your selected game and opponent settings.'
+    : 'Your current progress will be lost. Re-racking starts a fresh game with both players back at the beginning.';
+  rerackDialog.querySelector<HTMLButtonElement>('[value="rerack"]')!.textContent = fromSettings ? 'Start new game' : 'Re-rack';
+  rerackDialog.returnValue = '';
+  rerackDialog.showModal();
+}
+function startSettingsMatch() {
+  if (onlineMode) { online.leave(); onlineMode = false; }
+  snooker = select('game').value === 'snooker';
+  versusComputer = select('opponent').value === 'computer';
+  resetMatch();
+}
 document.querySelector<HTMLButtonElement>('#reset')!.onclick = () => {
   if (onlineMode && (online.seat !== 0 || !online.active)) return;
   if (needsRerackConfirmation()) {
-    rerackDialog.returnValue = '';
-    rerackDialog.showModal();
+    confirmNewGame(false);
   } else resetMatch();
 };
 rerackDialog.addEventListener('close', () => {
-  if (rerackDialog.returnValue !== 'rerack') return;
+  const fromSettings = pendingSettingsMatch;
+  pendingSettingsMatch = false;
+  if (rerackDialog.returnValue !== 'rerack') {
+    if (fromSettings) settings.showModal();
+    return;
+  }
   rerackDialog.returnValue = '';
-  if (!onlineMode || online.seat === 0 && online.active) resetMatch();
+  if (fromSettings) startSettingsMatch();
+  else if (!onlineMode || online.seat === 0 && online.active) resetMatch();
 });
 document.querySelector<HTMLButtonElement>('#noticeRematch')!.onclick = () => {
   if (!onlineMode || online.active && online.seat === 0) resetMatch();
@@ -900,10 +949,8 @@ document.querySelector<HTMLButtonElement>('#openSettings')!.onclick = () => {
 settings.addEventListener('close', () => {
   if (settings.returnValue !== 'start') return;
   settings.returnValue = '';
-  if (onlineMode) { online.leave(); onlineMode = false; }
-  snooker = select('game').value === 'snooker';
-  versusComputer = select('opponent').value === 'computer';
-  resetMatch();
+  if (needsRerackConfirmation()) confirmNewGame(true);
+  else startSettingsMatch();
 });
 
 const cueStyles: Record<string, [string, string]> = {
@@ -934,7 +981,7 @@ function gameState(): SavedGame {
     strike, shotPower, tip: [tipX, tipY], aimLocked, calledPocket };
 }
 function applyGame(s: SavedGame, preserveLocalAim = false) {
-  balls = structuredClone(s.balls);
+  balls = s.balls.map(ball => ({ ...ball }));
   snooker = s.snooker;
   versusComputer = s.versusComputer;
   turn = s.turn;
@@ -1046,14 +1093,15 @@ showReadyStatus();
 
 function fitOverheadCamera() {
   if (!overhead || viewMode) return;
-  const bounds = canvas.getBoundingClientRect();
+  const bounds = (tvEnabled ? tvCanvas : canvas).getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
   const header = document.querySelector('header')!.getBoundingClientRect();
   document.documentElement.style.setProperty('--notice-top', header.bottom + 8 + 'px');
   const footer = document.querySelector('footer')!.getBoundingClientRect();
+  if (tvEnabled) tvTable?.resize(bounds.width, bounds.height, header.bottom - bounds.top + 12, footer.top - bounds.top - 12);
   // Phones keep the long axis vertical, including when held sideways.
   const mobile = window.matchMedia('(max-width: 600px), (pointer: coarse) and (max-height: 600px)').matches;
-  const landscape = !mobile && bounds.width > bounds.height;
+  const landscape = (tvEnabled || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
   const bottom = footer.top - bounds.top - 6;
   const availableHeight = Math.max(1, bottom - top);
@@ -1086,10 +1134,137 @@ function resize() {
 }
 quality.onchange = resize;
 new ResizeObserver(resize).observe(canvas);
+new ResizeObserver(fitOverheadCamera).observe(tvCanvas);
 const controlsObserver = new ResizeObserver(fitOverheadCamera);
 controlsObserver.observe(document.querySelector('header')!);
 controlsObserver.observe(document.querySelector('footer')!);
 resize();
+
+const tvToggle = document.querySelector<HTMLButtonElement>('#tvToggle')!;
+const tvPanel = document.querySelector<HTMLElement>('#tvControls')!;
+function updateTvControls() {
+  if (!tvEnabled) return;
+  const busy = rolling || strike > 0 || !canControl();
+  const context = [turn, placement, busy, finished, breaking].join(':');
+  if (context !== tvContext) { remote.reset(Boolean(placement)); tvContext = context; }
+  const labels = {
+    place: ['Place the cue ball', '↑ ↓ ← → Move ball · OK Keep position · Back Menu'],
+    aim: ['Aim your shot', '← → Aim · ↑ ↓ Fine aim · OK Set power · Back Menu'],
+    pocket: ['Call a pocket for the 8', '← → Choose pocket · OK Confirm · Back Aim'],
+    power: ['Set power, then shoot', '↑ ↓ Power · OK Shoot · Back Aim'],
+  };
+  const [title, help] = labels[remote.stage];
+  const stepText = finished ? 'Game finished' : busy ? rolling || strike ? 'Balls in motion' : 'Waiting for opponent' : title;
+  const helpText = finished || busy ? 'Back Menu' : remote.stage === 'pocket' ? help + ' · ' + pocketChoice.options[(calledPocket ?? 0) + 1].text : help;
+  const powerText = Math.round(remote.power * 100) + '%';
+  const presentation = [stepText, helpText, powerText].join('|');
+  if (tvPresentation === presentation) return;
+  tvPresentation = presentation;
+  status.textContent = stepText;
+  document.querySelector<HTMLElement>('#tvStep')!.textContent = stepText;
+  document.querySelector<HTMLElement>('#tvHelp')!.textContent = helpText;
+  document.querySelector<HTMLOutputElement>('#tvPower')!.value = powerText;
+}
+function applyTvMode() {
+  document.body.classList.toggle('tv-mode', tvEnabled);
+  tvPanel.hidden = !tvEnabled;
+  tvCanvas.hidden = !tvEnabled;
+  canvas.hidden = tvEnabled;
+  if (tvEnabled && !tvTable) tvTable = new TvTable(tvCanvas);
+  tvToggle.textContent = tvEnabled ? 'TV on' : 'TV off';
+  tvToggle.setAttribute('aria-pressed', String(tvEnabled));
+  tvToggle.disabled = webglUnavailable;
+  const compatibility = document.querySelector<HTMLElement>('#tvCompatibility')!;
+  compatibility.hidden = !webglUnavailable;
+  compatibility.textContent = webglUnavailable ? 'Your browser could not start 3D. The TV table keeps the game playable.' : '';
+  tvContext = '';
+  if (tvEnabled) {
+    if (viewMode) viewToggle.click();
+    if (!overhead) document.querySelector<HTMLButtonElement>('#camera')!.click();
+    aimLocked = false;
+    tableStroke = undefined;
+    clearStroke();
+    setTip(0, 0);
+    setCameraZoom(1);
+    updateTvControls();
+  } else if (!rolling && !strike) showReadyStatus();
+  requestAnimationFrame(fitOverheadCamera);
+}
+tvToggle.onclick = () => {
+  tvEnabled = !tvEnabled;
+  try { localStorage.setItem('billiard-tv', tvEnabled ? 'on' : 'off'); } catch {}
+  if (!tvEnabled && headlessGraphics) {
+    // The 3D scene needs a real engine. Restore this match after restarting it.
+    saveGame();
+    const url = new URL(location.href);
+    url.searchParams.set('table', '3d');
+    location.replace(url.href);
+    return;
+  }
+  applyTvMode();
+};
+document.querySelector<HTMLButtonElement>('#tvMenu')!.onclick = () => setMobileMenu(true);
+function navigateTvDialog(dialog: HTMLDialogElement, key: RemoteKey) {
+  if (key === 'back') {
+    if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+    return;
+  }
+  const controls = [...dialog.querySelectorAll<HTMLElement>('button, input, select, a[href]')]
+    .filter(el => !el.matches(':disabled') && el.getClientRects().length > 0);
+  const active = document.activeElement as HTMLElement;
+  const index = controls.indexOf(active);
+  if (key === 'left' || key === 'right') {
+    const direction = key === 'right' ? 1 : -1;
+    if (active instanceof HTMLSelectElement) {
+      active.selectedIndex = Math.max(0, Math.min(active.options.length - 1, active.selectedIndex + direction));
+      active.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    if (active instanceof HTMLInputElement && active.type === 'range') {
+      direction > 0 ? active.stepUp() : active.stepDown();
+      active.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+  }
+  if (key === 'ok' && index >= 0 && !(active instanceof HTMLSelectElement)) { active.click(); return; }
+  const next = controls[(index + (key === 'up' || key === 'left' ? -1 : 1) + controls.length) % controls.length];
+  next?.focus();
+  next?.scrollIntoView({ block: 'nearest' });
+}
+document.addEventListener('keydown', event => {
+  if (!tvEnabled) return;
+  const key = remoteKey(event.key, event.keyCode);
+  if (!key) return;
+  const dialogs = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')];
+  const dialog = dialogs.find(d => d.classList.contains('modal-child')) ?? dialogs[dialogs.length - 1];
+  // Text fields keep normal typing and their platform's on-screen keyboard.
+  if (dialog && event.target instanceof HTMLInputElement && !['range', 'checkbox', 'button'].includes(event.target.type) && event.key !== 'Escape' && key !== 'ok' && !['up', 'down'].includes(key) && event.keyCode !== 10009 && event.keyCode !== 461) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if ((key === 'ok' || key === 'back') && event.repeat) return;
+  if (dialog) { navigateTvDialog(dialog, key); return; }
+  updateTvControls();
+  if (key === 'back' && (rolling || strike || !canControl() || finished)) { setMobileMenu(true); return; }
+  if (rolling || strike || !canControl() || finished) return;
+  if (strokePointer !== undefined || aimPointer !== undefined) return;
+  const stage = remote.stage;
+  const needsPocket = !snooker && legalTargets().includes(8);
+  if (stage === 'place' && placement && ['left', 'right', 'up', 'down'].includes(key)) {
+    const position = remotePlacement(balls, placement, key, camera.alpha);
+    if (position) Object.assign(balls[0], position);
+  } else if (stage === 'aim' && ['left', 'right', 'up', 'down'].includes(key)) {
+    const angle = Math.atan2(aim.x, aim.z) + (key === 'left' ? -1 : key === 'right' ? 1 : key === 'up' ? -0.1 : 0.1) * Math.PI / 180;
+    aim.set(Math.sin(angle), 0, Math.cos(angle));
+  } else if (stage === 'pocket' && ['left', 'right', 'up', 'down'].includes(key)) {
+    calledPocket = ((calledPocket ?? 0) + (key === 'left' || key === 'up' ? 5 : 1)) % 6;
+  }
+  const action = remote.press(key, needsPocket);
+  if (remote.stage === 'pocket') calledPocket ??= 0;
+  if (action === 'menu') setMobileMenu(true);
+  if (action === 'shoot') { fire(remote.power); remote.reset(Boolean(placement)); }
+  updateTvControls();
+}, true);
+applyTvMode();
 
 let networkElapsed = 0, saveElapsed = 0;
 let noticeKey = '';
@@ -1120,7 +1295,7 @@ function celebrateWin() {
 function updateGameNotice() {
   const kind = finished ? 'win' : placement && !rolling && !strike ? 'hand' : '';
   const winningPlayer = winner ?? (scores[0] === scores[1] ? undefined : scores[0] > scores[1] ? 0 : 1);
-  const key = [kind, turn, winningPlayer, online.active, online.seat, playerName(0), playerName(1), placement].join(':');
+  const key = [kind, turn, winningPlayer, online.active, online.seat, playerName(0), playerName(1), placement, tvEnabled].join(':');
   if (key === noticeKey) return;
   noticeKey = key;
   notice.hidden = !kind;
@@ -1139,9 +1314,10 @@ function updateGameNotice() {
   rematch.disabled = onlineMode && !online.active;
   document.querySelector<HTMLElement>('#noticeLabel')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'HONOURS EVEN' : 'VICTORY' : placement === 'break' ? 'BREAK SETUP' : 'BALL IN HAND';
   document.querySelector<HTMLElement>('#noticeTitle')!.textContent = kind === 'win' ? winningPlayer === undefined ? 'Match drawn' : playerName(winningPlayer) + ' wins!' : playerName(turn) + ' · Ball in hand';
-  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = kind === 'win' ? onlineMode && online.seat !== 0 ? 'What a game! Waiting for the host to start the next round.' : winningPlayer === undefined ? 'A close match. Time for a rematch?' : 'What a finish. Ready for another round?' : canControl() ? placement === 'break' ? 'Drag the highlighted cue ball behind the head string.' : 'Drag the highlighted cue ball to place it.' : 'Your opponent is placing the cue ball.';
+  document.querySelector<HTMLElement>('#noticeDetail')!.textContent = kind === 'win' ? onlineMode && online.seat !== 0 ? 'What a game! Waiting for the host to start the next round.' : winningPlayer === undefined ? 'A close match. Time for a rematch?' : 'What a finish. Ready for another round?' : canControl() ? tvEnabled ? 'Use the arrows to place the cue ball, then press OK.' : placement === 'break' ? 'Drag the highlighted cue ball behind the head string.' : 'Drag the highlighted cue ball to place it.' : 'Your opponent is placing the cue ball.';
 }
 engine.runRenderLoop(() => {
+  updateTvControls();
   updateGameNotice();
   handRing.isVisible = Boolean(placement) && !finished && !rolling && !strike;
   handRing.position.set(balls[0].x, 0.004, balls[0].z);
@@ -1204,48 +1380,56 @@ engine.runRenderLoop(() => {
       finishShot();
     }
   }
-  balls.forEach((ball, index) => {
-    const mesh = ballMeshes[index];
-    const dx = ball.x - mesh.position.x, dz = ball.z - mesh.position.z;
-    const distance = Math.hypot(dx, dz);
-    if (rolling && distance > 0.00001) {
-      const rotation = Quaternion.RotationAxis(new Vector3(dz, 0, -dx).normalize(), distance / radius);
-      mesh.rotationQuaternion = rotation.multiply(mesh.rotationQuaternion!);
-    }
-    mesh.position.set(ball.x, ball.pocketed ? Math.max(-0.12, mesh.position.y - dt * 0.48) : radius, ball.z);
-    mesh.isVisible = mesh.position.y > -0.04;
-    contacts[index].position.set(ball.x, 0.0008, ball.z);
-    contacts[index].isVisible = !ball.pocketed;
-  });
-  aimLine.isVisible = guidesEnabled && !rolling && !strike && !movingCueBall && !finished;
-  cue.isVisible = !rolling && !movingCueBall && !finished;
-  objectGuide.isVisible = ghostBall.isVisible = pocketGuide.isVisible = false;
-  if (!rolling) {
-    const origin = new Vector3(cueBall.x, radius, cueBall.z);
-    const pose = cuePose(balls, aim.x, aim.z, tipX, tipY, strike * shotPower * 0.9 + pull * 0.16);
-    cue.position.set(pose.center.x, pose.center.y, pose.center.z);
-    const direction = new Vector3(pose.direction.x, pose.direction.y, pose.direction.z);
-    const rotationAxis = Vector3.Cross(Vector3.Up(), direction).normalize();
-    cue.rotationQuaternion = Quaternion.RotationAxis(rotationAxis, Math.acos(direction.y));
-    const guide = traceShot(balls, aim.x, aim.z);
-    MeshBuilder.CreateLines('aim guide', { points: [origin.add(aim.scale(radius)), new Vector3(guide.impact.x, radius, guide.impact.z)], instance: aimLine });
-    if (aimLine.isVisible && guide.objectStart && guide.objectEnd) {
-      objectGuide.isVisible = ghostBall.isVisible = true;
-      ghostBall.position.set(guide.impact.x, 0.004, guide.impact.z);
-      MeshBuilder.CreateDashedLines('object ball path', {points: [new Vector3(guide.objectStart.x, radius, guide.objectStart.z), new Vector3(guide.objectEnd.x, radius, guide.objectEnd.z)], instance: objectGuide});
-      if (guide.pocket) {
-        pocketGuide.isVisible = true;
-        pocketGuide.position.set(guide.pocket.x, 0.035, guide.pocket.z);
+  if (!tvEnabled) {
+    balls.forEach((ball, index) => {
+      const mesh = ballMeshes[index];
+      const dx = ball.x - mesh.position.x, dz = ball.z - mesh.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (rolling && distance > 0.00001) {
+        const rotation = Quaternion.RotationAxis(new Vector3(dz, 0, -dx).normalize(), distance / radius);
+        mesh.rotationQuaternion = rotation.multiply(mesh.rotationQuaternion!);
+      }
+      mesh.position.set(ball.x, ball.pocketed ? Math.max(-0.12, mesh.position.y - dt * 0.48) : radius, ball.z);
+      mesh.isVisible = mesh.position.y > -0.04;
+      contacts[index].position.set(ball.x, 0.0008, ball.z);
+      contacts[index].isVisible = !ball.pocketed;
+    });
+    aimLine.isVisible = guidesEnabled && !rolling && !strike && !movingCueBall && !finished;
+    cue.isVisible = !rolling && !movingCueBall && !finished;
+    objectGuide.isVisible = ghostBall.isVisible = pocketGuide.isVisible = false;
+    if (!rolling) {
+      const origin = new Vector3(cueBall.x, radius, cueBall.z);
+      const pose = cuePose(balls, aim.x, aim.z, tipX, tipY, strike * shotPower * 0.9 + pull * 0.16);
+      cue.position.set(pose.center.x, pose.center.y, pose.center.z);
+      const direction = new Vector3(pose.direction.x, pose.direction.y, pose.direction.z);
+      const rotationAxis = Vector3.Cross(Vector3.Up(), direction).normalize();
+      cue.rotationQuaternion = Quaternion.RotationAxis(rotationAxis, Math.acos(direction.y));
+      const guide = traceShot(balls, aim.x, aim.z);
+      MeshBuilder.CreateLines('aim guide', { points: [origin.add(aim.scale(radius)), new Vector3(guide.impact.x, radius, guide.impact.z)], instance: aimLine });
+      if (aimLine.isVisible && guide.objectStart && guide.objectEnd) {
+        objectGuide.isVisible = ghostBall.isVisible = true;
+        ghostBall.position.set(guide.impact.x, 0.004, guide.impact.z);
+        MeshBuilder.CreateDashedLines('object ball path', {points: [new Vector3(guide.objectStart.x, radius, guide.objectStart.z), new Vector3(guide.objectEnd.x, radius, guide.objectEnd.z)], instance: objectGuide});
+        if (guide.pocket) {
+          pocketGuide.isVisible = true;
+          pocketGuide.position.set(guide.pocket.x, 0.035, guide.pocket.z);
+        }
       }
     }
-  }
-  if (cameraTarget !== undefined) {
-    camera.beta += (cameraTarget - camera.beta) * Math.min(dt * 7, 1);
-    if (Math.abs(cameraTarget - camera.beta) < 0.003) cameraTarget = undefined;
+    if (cameraTarget !== undefined) {
+      camera.beta += (cameraTarget - camera.beta) * Math.min(dt * 7, 1);
+      if (Math.abs(cameraTarget - camera.beta) < 0.003) cameraTarget = undefined;
+    }
   }
   sound.flush();
   updateSession(dt);
-  scene.render();
+  if (tvEnabled) tvTable?.draw({
+    balls, aim, rolling, finished, placement: Boolean(placement), guides: guidesEnabled,
+    callEligible: callEligible && canControl(), calledPocket, snooker,
+    tableStyle: select('tableStyle').value, cueStyle: select('cueStyle').value,
+    pull: strike ? strike * shotPower * 5 : remote.stage === 'power' ? remote.power : 0,
+  });
+  else scene.render();
 });
 
 function updateSession(dt: number) {

@@ -226,3 +226,27 @@ footer.game-hud .call-pocket { padding-bottom: 6px; border-bottom: 1px solid var
 }
 @media (prefers-reduced-motion: reduce) { .game-hud .hud-action { transition: none; } }
 
+/* TV play keeps the table and a single, readable remote instruction strip. */
+body.tv-mode footer.game-hud > :not(#tvControls),
+body.tv-mode .camera-zoom,
+body.tv-mode header.game-hud > #tableActions,
+body.tv-mode #mobileGameMenu :is(#viewMode, #camera) { display: none; }
+body.tv-mode #tvControls { display: flex; align-items: center; gap: 24px; width: 100%; padding: 8px 16px; }
+body.tv-mode #tvControls > div { flex: 1; min-width: 0; display: grid; gap: 8px; }
+body.tv-mode #tvStep { font-size: clamp(1rem, 1.5vw, 1.4rem); color: var(--text); }
+body.tv-mode #tvHelp { font-size: clamp(.85rem, 1.25vw, 1.15rem); color: var(--text); }
+body.tv-mode #tvPower { color: var(--accent); font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+body.tv-mode .ui-dialog { width: min(760px, calc(100vw - 64px)); font-size: 1.1rem; }
+body.tv-mode .ui-dialog :is(button, select, input) { min-height: 48px; font-size: 1rem; }
+body.tv-mode .ui-dialog :is(small, .settings-note) { font-size: .95rem; }
+body.tv-mode :is(button, input, select, a):focus { outline: 4px solid #ffe3a1; outline-offset: 4px; box-shadow: 0 0 0 7px #121d17; }
+body.tv-mode header.game-hud { grid-template-columns: minmax(0, 1fr) auto 64px; }
+body.tv-mode header.game-hud #mobileMenu { display: flex; grid-column: 3; grid-row: 1; width: 56px; min-height: 48px; }
+body.tv-mode .game-hud #status { font-size: .9rem; }
+@media (max-width: 600px) {
+  body.tv-mode #tvControls { gap: 12px; padding: 4px; flex-wrap: wrap; }
+  body.tv-mode #tvControls > div { flex-basis: 70%; }
+  body.tv-mode header.game-hud { grid-template-columns: minmax(0, 1fr) 64px; }
+  body.tv-mode header.game-hud #mobileMenu { grid-column: 2; }
+}
+

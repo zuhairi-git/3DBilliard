@@ -33,7 +33,12 @@
     <div id="gameMenuActions"></div>
     <div class="ui-dialog-actions"><form method="dialog"><button class="ui-button ui-button--primary" value="close">Back to game</button></form></div>
   </dialog>
-  <main><canvas id="table" aria-label="3D pool table"></canvas></main>
+  <main><canvas id="table" aria-label="3D pool table"></canvas><canvas id="tvTable" aria-label="TV pool table, overhead view" hidden></canvas></main>
+  <dialog class="ui-dialog tv-detection" id="tvDetection" aria-labelledby="tvDetectionTitle" aria-describedby="tvDetectionDescription">
+    <div class="settings-heading"><span class="eyebrow">WELCOME TO THE TABLE</span><h2 id="tvDetectionTitle">Playing on a TV?</h2></div>
+    <p id="tvDetectionDescription">This looks like a TV browser. TV mode uses a lightweight table and simple arrow, OK and Back controls. You can change this in Settings anytime.</p>
+    <div class="ui-dialog-actions"><button class="ui-button ui-button--primary" type="button" autofocus>Yes, use TV mode</button><button class="ui-button" type="button">Use regular 3D</button></div>
+  </dialog>
   <section id="gameNotice" class="game-notice" role="status" aria-live="polite" hidden>
     <div class="victory-emblem" aria-hidden="true">
       <svg viewBox="0 0 100 100" focusable="false"><defs><linearGradient id="victoryGold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff0b7"/><stop offset=".5" stop-color="#eac16a"/><stop offset="1" stop-color="#bd8030"/></linearGradient></defs><g stroke="#c38d3d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M29 28H17v9c0 12 9 18 20 18m34-27h12v9c0 12-9 18-20 18" fill="none"/><path d="M28 19h44v22c0 17-10 25-22 25S28 58 28 41Z" fill="url(#victoryGold)"/><path d="M50 67v14m-17 7h34l-5-7H38Z" fill="url(#victoryGold)"/></g><path d="m50 29 4 8 9 1-7 6 2 9-8-4-8 4 2-9-7-6 9-1Z" fill="#fff5d4"/><path d="m13 14 2 5 5 2-5 2-2 5-2-5-5-2 5-2Zm73 42 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="#eac16a"/></svg>
@@ -50,6 +55,11 @@
     <button class="zoom-button zoom-value" id="zoomFit" type="button" aria-label="Reset zoom to fit the table" title="Fit table">1.0×</button>
   </aside>
   <footer class="game-hud" aria-label="Shot controls">
+    <div id="tvControls" hidden>
+      <div><strong id="tvStep">Aim your shot</strong><span id="tvHelp">← → Aim · ↑ ↓ Fine aim · OK Set power · Back Menu</span></div>
+      <output id="tvPower" aria-label="Remote shot power">50%</output>
+      <button class="ui-button" id="tvMenu" type="button">Menu</button>
+    </div>
     <div class="call-pocket" id="callPocket" hidden><label for="pocketChoice">Black 8 · Call pocket</label><select class="ui-select" id="pocketChoice"><option value="">Choose on the table…</option><option value="0">Head · left</option><option value="1">Middle · left</option><option value="2">Foot · left</option><option value="3">Head · right</option><option value="4">Middle · right</option><option value="5">Foot · right</option></select></div>
     <button class="ui-button hud-action" id="lockAim" type="button" aria-pressed="false" title="Lock aim to pull back and shoot on the table"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/><circle cx="12" cy="12" r="2"/></svg><span class="hud-label">Aim lock</span></button>
     <div class="contact">
@@ -72,6 +82,7 @@
     <label class="ui-field"><span>Game</span><span class="ui-select-wrap"><select class="ui-select" id="game"><option value="pool">Pool · Eight-ball</option><option value="snooker">Snooker</option></select></span></label>
     <label class="ui-field"><span>Play</span><span class="ui-select-wrap"><select class="ui-select" id="opponent"><option value="solo">Practice · Control both players</option><option value="computer">Against computer</option></select></span></label>
     <label class="ui-field"><span>Difficulty</span><span class="ui-select-wrap"><select class="ui-select" id="difficulty"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></span></label>
+    <div class="sound-row"><div><strong>Play on TV</strong><small>Lightweight TV table with remote controls. Arrows to aim, OK to play, Back for the menu. In menus: ↑ ↓ move, ← → change, OK select.</small><small id="tvCompatibility" hidden></small></div><button class="ui-button" id="tvToggle" type="button" aria-pressed="false">TV off</button></div>
     <div class="sound-row"><div><strong>Shot guides</strong><small>Aim line, object-ball path and pocket highlight</small></div><button class="ui-button" id="guidesToggle" type="button" aria-pressed="true">Guides on</button></div>
     </fieldset><fieldset><legend>Room &amp; equipment</legend>
     <label class="ui-field"><span>Cue</span><span class="ui-select-wrap"><select class="ui-select" id="cueStyle"><option>Classic Maple</option><option>Rosewood</option><option>Carbon Black</option></select></span></label>
@@ -113,7 +124,7 @@
   <div class="ui-dialog-actions"><button class="ui-button" id="leaveOnline" type="button">Leave game</button><form method="dialog"><button class="ui-button" value="close">Close</button></form></div>
 </dialog>
 <script type="module" src="/src/theme.ts"></script>
-<script type="module" src="/src/main.ts"></script>
+<script type="module" src="/src/bootstrap.ts"></script>
 </body>
 </html>
 

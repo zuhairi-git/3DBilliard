@@ -7,7 +7,20 @@ A static file host alone does not support online games.
 
 ## Play
 
+- Turn on **Settings → Play on TV** for a remote-friendly, fitted overhead view.
+  Recognized TV browsers ask whether to enable it on their first visit and remember
+  the answer. TV mode draws a separate lightweight Canvas 2D table, without WebGL;
+  the regular 3D table and room keep their existing design. If WebGL cannot start,
+  the game falls back to the TV table automatically. Switching from a TV-only startup
+  back to 3D reloads the game and restores the saved match when browser storage is available.
+  Arrows place the cue ball; OK keeps its position. Left/right aim, up/down fine-tune;
+  OK moves to power. Up/down changes power, then OK shoots. When playing the eight,
+  choose its pocket with arrows and OK first. Back returns to aiming or opens the menu.
+  In menus, up/down moves focus, left/right changes a setting, and OK selects.
+  The TV setting is remembered on this device. Use a remote that sends directional,
+  OK and Back keys to the browser (a keyboard works too).
 - Practice controls both sides of a two-player game. Settings also offers a computer opponent.
+- **Start new game** in Settings asks before discarding a game already in progress.
 - Eight-ball displays each player's solids/stripes assignment and remaining balls.
   The break leaves the table open. A legal pot after the break assigns groups.
   Pot your group before the eight, then call its pocket by tapping a pocket or using
