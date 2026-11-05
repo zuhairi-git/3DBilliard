@@ -350,3 +350,13 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 
 .game-hud .group-marker.svg-group-marker { background: none !important; border: 0; box-shadow: none; }
 .svg-group-marker > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* Small editable text triggers automatic focus zoom in mobile Safari. */
+@media (pointer: coarse), (max-width: 600px) {
+  .ui-dialog :is(input, textarea, select), .call-pocket select {
+    font-size: 16px;
+  }
+}
+
+#stroke .cue-stick { top: 3px; height: 16px; background: none; clip-path: none; }
+#stroke .cue-stick svg { display: block; width: 100%; height: 100%; overflow: visible; }

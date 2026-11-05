@@ -1,3 +1,4 @@
+import { cueArtwork } from './svg-cue';
 import { ballArtwork } from './svg-ball';
 import { traceShot } from './aim-guide';
 import { cushions, width, length, radius, pockets } from './physics';
@@ -44,7 +45,7 @@ export class SvgTable {
       <linearGradient id="sv-maple" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#ffeab6"/><stop offset=".35" stop-color="#e5b86e"/><stop offset=".65" stop-color="#fff0c5"/><stop offset="1" stop-color="#99682e"/></linearGradient>
       <pattern id="sv-fibre" width="127" height="131" patternUnits="userSpaceOnUse">${feltFibres()}</pattern>
       <clipPath id="sv-ball-clip"><circle r="35"/></clipPath>
-    </defs><g class="sv-world"><g class="sv-table"></g><g class="sv-guides"></g><g class="sv-cue"></g><g class="sv-balls"></g></g>`;
+    </defs><g class="sv-world"><g class="sv-table"></g><g class="sv-guides"></g><g class="sv-balls"></g><g class="sv-cue"></g></g>`;
     this.root = svg.querySelector('.sv-world')!;
     this.table = svg.querySelector('.sv-table')!;
     this.guides = svg.querySelector('.sv-guides')!;
@@ -156,8 +157,7 @@ export class SvgTable {
     const cueKey = state.cueStyle;
     if (this.cue.dataset.finish !== cueKey) {
       this.cue.dataset.finish = cueKey;
-      const butt = cueKey === 'Carbon Black' ? '#151c28' : cueKey === 'Rosewood' ? '#652d32' : '#653d29';
-      this.cue.innerHTML = '<path d="M-1250 -10L0 -3V3L-1250 10Z" fill="#000" opacity=".25" transform="translate(2 8)"/><path d="M-1250 -10L0 -3V3L-1250 10Z" fill="url(#sv-maple)"/><path d="M-1250 -10L-850 -7.8V7.8L-1250 10Z" fill="'+butt+'"/><path d="M-1000 -8.5V8.5 M-860 -7.8V7.8" stroke="#d9c18c" stroke-width="6"/><path d="M-842 -7.6L-700 0L-842 7.6Z" fill="'+butt+'"/><path d="M-18 -3.1H-4V3.1H-18Z" fill="#fff4d6"/><path d="M-4 -3H0V3H-4Z" fill="#48a1ba"/>';
+      this.cue.innerHTML = cueArtwork(cueKey);
     }
   }
 }

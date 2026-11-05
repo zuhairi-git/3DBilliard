@@ -1,3 +1,4 @@
+import { cueArtwork } from './svg-cue';
 import { ballBadge } from './svg-ball';
 import { GameAudio } from './audio';
 import { RemoteShot, remoteKey, remotePlacement, type RemoteKey } from './tv-controls';
@@ -1196,12 +1197,16 @@ const tableStyles: Record<string, [string, string, string]> = {
   'Tournament Blue': ['#258bd0', '#125283', '#182b43'],
   'Burgundy Lounge': ['#b44876', '#742c54', '#30233c'],
 };
-select('cueStyle').onchange = () => {
+function updateCueStyle() {
   const [shaft, butt] = cueStyles[select('cueStyle').value];
   (cue.material as StandardMaterial).diffuseColor = Color3.FromHexString(shaft);
   stroke.style.setProperty('--cue-shaft', shaft);
   stroke.style.setProperty('--cue-butt', butt);
-};
+  stroke.querySelector('.cue-stick')!.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1260 -14 1265 32" preserveAspectRatio="none">' + cueArtwork(select('cueStyle').value) + '</svg>';
+  stroke.setAttribute('title', select('cueStyle').value + ' · Pull left and release to shoot');
+}
+select('cueStyle').onchange = updateCueStyle;
+updateCueStyle();
 function applyTableFinish() {
   const [felt, cushion, rail] = snooker ? ['#851e39', '#4d142c', '#211a29'] : tableStyles[select('tableStyle').value];
   document.body.classList.toggle('snooker-game', snooker);
