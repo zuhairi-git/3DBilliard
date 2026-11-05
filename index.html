@@ -18,6 +18,7 @@
     <div id="score" aria-label="Players and pocketed balls"></div>
     <button class="ui-button hud-action" id="mobileMenu" type="button" aria-label="Open game menu" aria-expanded="false" aria-haspopup="dialog" aria-controls="mobileGameMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="menu-open-icon" d="M4 6h16M4 12h16M4 18h16"/><path class="menu-close-icon" d="m6 6 12 12M6 18 18 6"/></svg></button>
     <nav id="tableActions" aria-label="Table controls">
+      <button class="ui-button hud-action" id="fullscreen" type="button" aria-pressed="false" title="Enter full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg><span class="hud-label">Full screen</span></button>
       <button class="ui-button hud-action" id="viewMode" type="button" aria-pressed="false" title="Orbit the table camera"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M20 9c-1-4-8-6-13-3S2 15 6 18s11 1 14-3M18 4l2 5-5 1"/></svg><span class="hud-label">Orbit</span></button>
       <button class="ui-button hud-action" id="camera" type="button" aria-label="Switch to perspective view" title="Switch camera angle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 8 9-5 9 5v9l-9 4-9-4Z M3 8l9 5 9-5M12 13v8"/></svg><span class="hud-label">3D view</span></button>
       <button class="ui-button hud-action" id="reset" type="button" title="Re-rack for a new game"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 10 17H2Z"/><circle cx="12" cy="10" r="1.4"/><circle cx="9.5" cy="15" r="1.4"/><circle cx="14.5" cy="15" r="1.4"/></svg><span class="hud-label">Re-rack</span></button>
@@ -25,18 +26,23 @@
       <button class="ui-button hud-action" id="openSettings" type="button" title="Game settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z"/><circle cx="12" cy="12" r="3"/></svg><span class="hud-label">Settings</span></button>
     </nav>
   </header>
+  <p id="fullscreenNotice" class="fullscreen-notice" role="status" hidden></p>
   <dialog id="mobileGameMenu" class="ui-dialog game-menu" aria-labelledby="gameMenuTitle">
+    <div class="dialog-body">
     <div class="game-menu-heading">
       <div class="settings-heading"><span class="eyebrow">AT THE TABLE</span><h2 id="gameMenuTitle">Game menu</h2></div>
       <button class="ui-button game-menu-close" id="closeGameMenu" type="button" aria-label="Close game menu" autofocus><span aria-hidden="true">×</span></button>
     </div>
     <div id="gameMenuActions"></div>
+    </div>
     <div class="ui-dialog-actions"><form method="dialog"><button class="ui-button ui-button--primary" value="close">Back to game</button></form></div>
   </dialog>
   <main><canvas id="table" aria-label="3D pool table"></canvas><canvas id="tvTable" aria-label="TV pool table, overhead view" hidden></canvas></main>
   <dialog class="ui-dialog tv-detection" id="tvDetection" aria-labelledby="tvDetectionTitle" aria-describedby="tvDetectionDescription">
+    <div class="dialog-body">
     <div class="settings-heading"><span class="eyebrow">WELCOME TO THE TABLE</span><h2 id="tvDetectionTitle">Playing on a TV?</h2></div>
     <p id="tvDetectionDescription">This looks like a TV browser. TV mode uses a lightweight table and simple arrow, OK and Back controls. You can change this in Settings anytime.</p>
+    </div>
     <div class="ui-dialog-actions"><button class="ui-button ui-button--primary" type="button" autofocus>Yes, use TV mode</button><button class="ui-button" type="button">Use regular 3D</button></div>
   </dialog>
   <section id="gameNotice" class="game-notice" role="status" aria-live="polite" hidden>
@@ -77,6 +83,7 @@
   </footer>
   <dialog class="ui-dialog" id="settings" aria-labelledby="settingsTitle">
   <form method="dialog">
+    <div class="dialog-body">
     <div class="settings-heading"><span class="eyebrow">MAKE IT YOURS</span><h2 id="settingsTitle">Your room, your game.</h2></div>
     <p>Set the pace, choose your finish, and settle in.</p><fieldset><legend>Play</legend>
     <label class="ui-field"><span>Game</span><span class="ui-select-wrap"><select class="ui-select" id="game"><option value="pool">Pool · Eight-ball</option><option value="snooker">Snooker</option></select></span></label>
@@ -94,17 +101,21 @@
       <label class="volume-row" for="volume"><span>Volume</span><input id="volume" type="range" min="0" max="100" value="45"><output id="volumeLabel" for="volume">45%</output></label>
     </fieldset>
     <p class="settings-note">Game and opponent changes apply when you start a new game.</p>
+    </div>
     <div class="ui-dialog-actions"><button class="ui-button" value="close">Done</button><button class="ui-button ui-button--primary" id="newMatch" value="start">Start new game</button></div>
   </form>
 </dialog>
 <dialog class="ui-dialog" id="rerackConfirm" aria-labelledby="rerackTitle" aria-describedby="rerackDescription">
   <form method="dialog">
+    <div class="dialog-body">
     <div class="settings-heading"><span class="eyebrow">GAME IN PROGRESS</span><h2 id="rerackTitle">Re-rack this game?</h2></div>
     <p id="rerackDescription">Your current progress will be lost. Re-racking starts a fresh game with both players back at the beginning.</p>
+    </div>
     <div class="ui-dialog-actions"><button class="ui-button" value="cancel" autofocus>Keep playing</button><button class="ui-button ui-button--primary" value="rerack">Re-rack</button></div>
   </form>
 </dialog>
 <dialog class="ui-dialog" id="online" aria-labelledby="onlineTitle">
+  <div class="dialog-body">
   <div class="settings-heading"><span class="eyebrow">YOUR PROFILE · PLAY TOGETHER</span><h2 id="onlineTitle">Your player profile</h2></div>
   <label class="profile-name" for="profileName">Your name<input class="ui-select" id="profileName" maxlength="24" autocomplete="nickname"></label>
   <p>Your player ID: <strong id="playerId">Connecting…</strong></p>
@@ -121,6 +132,7 @@
   <div class="scan-actions"><button class="ui-button" id="scanInvite" type="button">Scan player QR</button><label class="ui-button photo-picker">Read QR photo<input id="scanPhoto" type="file" accept="image/*" capture="environment"></label></div>
   <div id="scanner" hidden><video id="scanVideo" autoplay playsinline muted aria-label="QR scanner camera preview"></video><button class="ui-button" id="stopScan" type="button">Stop camera</button></div>
   <p class="settings-note">Both players use the same game server. Practice and computer games always have two sides. In eight-ball, groups are assigned after the first legal pot following the break.</p>
+  </div>
   <div class="ui-dialog-actions"><button class="ui-button" id="leaveOnline" type="button">Leave game</button><form method="dialog"><button class="ui-button" value="close">Close</button></form></div>
 </dialog>
 <script type="module" src="/src/theme.ts"></script>

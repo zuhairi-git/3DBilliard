@@ -1,9 +1,10 @@
 import { shouldAskAboutTv } from './tv-detection';
 import { remoteKey } from './tv-controls';
-import { installDialogFallback } from './tv-dialogs';
+import { installDialogFallback, installDialogDismissal } from './tv-dialogs';
 
 async function start() {
   installDialogFallback();
+  installDialogDismissal();
   let preference: string | null = null;
   try { preference = localStorage.getItem('billiard-tv'); } catch {}
   const url = new URL(location.href);

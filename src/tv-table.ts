@@ -48,10 +48,24 @@ export class TvTable {
     this.view = tvViewport(this.screenWidth, this.screenHeight, top, bottom);
   }
 
+  project(x: number, z: number) {
+    const { landscape, scale, cx, cy } = this.view;
+    return landscape ? { x: cx + z * scale, y: cy + x * scale } : { x: cx + x * scale, y: cy - z * scale };
+  }
+
+  pick(screenX: number, screenY: number, includeRails = false) {
+    const { landscape, scale, cx, cy } = this.view;
+    const x = (landscape ? screenY - cy : screenX - cx) / scale;
+    const z = (landscape ? screenX - cx : cy - screenY) / scale;
+    const margin = includeRails ? 0.16 : 0;
+    if (Math.abs(x) > width / 2 + margin || Math.abs(z) > length / 2 + margin) return;
+    return { x, z };
+  }
+
   draw(state: TableState) {
     const ctx = this.context;
-    const { scale, landscape, cx, cy } = this.view;
-    const point = (x: number, z: number) => landscape ? { x: cx + z * scale, y: cy + x * scale } : { x: cx + x * scale, y: cy - z * scale };
+    const { scale } = this.view;
+    const point = (x: number, z: number) => this.project(x, z);
     const line = (x: number, z: number, bx: number, bz: number, color: string, thickness: number) => {
       const a = point(x, z), b = point(bx, bz);
       ctx.strokeStyle = color;

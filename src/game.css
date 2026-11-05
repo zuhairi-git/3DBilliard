@@ -21,12 +21,13 @@ body { margin: 0; height: 100vh; height: 100dvh; overflow: hidden; background: v
 main { position: fixed; inset: 0; min-width: 0; min-height: 0; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 canvas[hidden] { display: none; }
-.tv-detection { width: min(720px, calc(100% - 48px)); padding: 28px; }
-.tv-detection p { margin-block: 20px; font-size: 1.1rem; line-height: 1.6; }
+.fullscreen-notice:not([hidden]) { position: fixed; z-index: 30; top: 16px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 14px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); text-align: center; box-shadow: 0 8px 28px #00000050; }
+.ui-dialog.tv-detection { width: min(720px, calc(100% - 48px)); }
+.tv-detection p { font-size: 1.1rem; line-height: 1.6; }
 .tv-detection .ui-button { min-height: 52px; font-size: 1rem; }
 .tv-detection .ui-button:focus { outline: 4px solid #ffe3a1; outline-offset: 3px; }
 dialog.dialog-fallback:not([open]) { display: none; }
-dialog.dialog-fallback[open] { position: fixed; z-index: 20; top: 6vh; left: 0; right: 0; margin-inline: auto; max-height: 88vh; overflow: auto; box-shadow: 0 0 0 100vmax #080d0acc; }
+dialog.dialog-fallback[open] { position: fixed; z-index: 20; top: 6vh; left: 0; right: 0; margin-inline: auto; max-height: 88vh; overflow: hidden; box-shadow: 0 0 0 100vmax #080d0acc; }
 .camera-zoom {
   position: fixed; z-index: 1; right: max(6px, env(safe-area-inset-right)); top: 50%; transform: translateY(-50%);
   display: grid; justify-items: center; width: 46px; padding: 8px 0 3px;
@@ -132,7 +133,10 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 .power-track span { display: block; height: 100%; width: var(--power, 0%); background: linear-gradient(90deg, #c58b47, #ffe0a2); }
 #strokeHint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .eyebrow { display: block; color: var(--accent); font-size: .64rem; letter-spacing: .18em; font-weight: 700; }
-.ui-dialog { width: min(530px, calc(100% - 24px)); max-width: calc(100vw - 24px); padding: 24px; overflow-x: hidden; overscroll-behavior: contain; box-shadow: 0 24px 80px #00000060; }
+.ui-dialog { width: min(530px, calc(100% - 24px)); max-width: calc(100vw - 24px); max-height: 90vh; max-height: 90dvh; padding: 0; overflow: hidden; overscroll-behavior: contain; box-shadow: 0 24px 80px #00000060; }
+.ui-dialog[open] { display: flex; flex-direction: column; }
+.ui-dialog > form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; max-height: inherit; gap: 0; margin: 0; overflow: hidden; }
+.dialog-body { display: grid; align-content: start; gap: 16px; flex: 1 1 auto; min-height: 0; padding: 24px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scroll-padding-block: 12px; }
 .ui-dialog.modal-parent { opacity: .68; transform: translateY(12px) scale(.965); filter: brightness(.88); }
 .ui-dialog.modal-child::backdrop { background: #00000012; }
 @keyframes dialog-reveal {
@@ -153,7 +157,7 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 }
 .settings-heading { display: grid; gap: 8px; }
 .settings-heading h2 { font: 1.65rem Georgia, serif; }
-.ui-dialog form { gap: 16px; min-width: 0; max-width: 100%; }
+.ui-dialog form { min-width: 0; max-width: 100%; }
 .ui-dialog :is(input, select, fieldset, .ui-field, .ui-select-wrap, .sound-row > div) { min-width: 0; max-width: 100%; }
 .ui-dialog p, .sound-row { overflow-wrap: anywhere; }
 .sound-row .ui-button { flex-shrink: 0; }
@@ -166,9 +170,9 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 .volume-row input { min-width: 0; flex: 1; min-height: 44px; accent-color: var(--accent); }
 .volume-row output { width: 3em; text-align: end; font-variant-numeric: tabular-nums; }
 .settings-note { font-size: .75rem; }
-.ui-dialog-actions { position: sticky; bottom: -24px; padding-block: 12px; background: var(--panel); }
+.ui-dialog-actions { position: sticky; bottom: 0; z-index: 1; flex: 0 0 auto; margin: 0; padding: 16px 24px; border-top: 1px solid var(--border); background: var(--panel); }
 /* Game navigation shares the Settings/Profile dialog surface and theme. */
-#mobileGameMenu .game-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+#mobileGameMenu .game-menu-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 #mobileGameMenu .game-menu-close { flex-shrink: 0; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; font-size: 1.6rem; line-height: 1; background: var(--control); color: var(--text); }
 #mobileGameMenu #tableActions { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; gap: 8px; padding: 0; border: 0; background: none; }
 #mobileGameMenu .hud-action {

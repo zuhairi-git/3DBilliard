@@ -61,3 +61,20 @@ test('TV renderer uses only Canvas 2D, caps its buffer, and preserves game state
   }
   assert.deepEqual(requests, ['2d']);
 });
+
+test('compatibility table pointer coordinates match balls and pockets at every orientation', () => {
+  const renderer = new TvTable({ getContext: () => ({}) });
+  for (const [w, h] of [[1920, 1080], [3840, 2160], [720, 1280]]) {
+    renderer.resize(w, h, 160, h - 140);
+    for (const [x, z] of [[0, -0.65], [0.2, 0.4]]) {
+      const screen = renderer.project(x, z);
+      const hit = renderer.pick(screen.x, screen.y);
+      assert.ok(Math.abs(hit.x - x) < 1e-10);
+      assert.ok(Math.abs(hit.z - z) < 1e-10);
+    }
+    const pocket = renderer.project(width / 2 + 0.016, length / 2 + 0.016);
+    assert.equal(renderer.pick(pocket.x, pocket.y), undefined);
+    assert.ok(renderer.pick(pocket.x, pocket.y, true));
+    assert.equal(renderer.pick(-100, -100, true), undefined);
+  }
+});

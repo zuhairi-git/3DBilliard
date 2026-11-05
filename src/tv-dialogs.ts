@@ -1,3 +1,47 @@
+export function dismissDialog(dialog: HTMLDialogElement) {
+  if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close('');
+}
+
+export function installDialogDismissal() {
+  const stack: HTMLDialogElement[] = [];
+  for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog')) {
+    const showModal = dialog.showModal.bind(dialog);
+    dialog.showModal = () => {
+      const wasOpen = dialog.open;
+      showModal();
+      if (!wasOpen) stack.push(dialog);
+    };
+    dialog.addEventListener('close', () => {
+      if (dialog.open) return;
+      const index = stack.indexOf(dialog);
+      if (index >= 0) stack.splice(index, 1);
+    });
+  }
+  const top = () => stack.filter(dialog => dialog.open).slice(-1)[0];
+  const outside = (dialog: HTMLDialogElement, event: MouseEvent) => {
+    if (event.target !== dialog && dialog.contains(event.target as Node)) return false;
+    const bounds = dialog.getBoundingClientRect();
+    return event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom;
+  };
+  let pressedOutside: HTMLDialogElement | null | undefined;
+  document.addEventListener('pointerdown', event => {
+    const dialog = top();
+    pressedOutside = dialog && outside(dialog, event) ? dialog : null;
+    if (pressedOutside) event.stopImmediatePropagation();
+  }, true);
+  document.addEventListener('click', event => {
+    const dialog = top();
+    const startedOutside = pressedOutside;
+    pressedOutside = undefined;
+    if (!dialog || !outside(dialog, event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    // Releasing a drag outside a dialog should not dismiss it.
+    if (startedOutside === null || startedOutside && startedOutside !== dialog) return;
+    dismissDialog(dialog);
+  }, true);
+}
+
 // Older TV browsers support Canvas 2D but may predate native modal dialogs.
 export function installDialogFallback() {
   const dialogs = [...document.querySelectorAll<HTMLDialogElement>('dialog')];
@@ -33,6 +77,6 @@ export function installDialogFallback() {
     const dialog = open[open.length - 1];
     if (event.key !== 'Escape' || !dialog) return;
     event.preventDefault();
-    if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+    dismissDialog(dialog);
   });
 }

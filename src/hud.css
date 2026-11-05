@@ -227,6 +227,7 @@ footer.game-hud .call-pocket { padding-bottom: 6px; border-bottom: 1px solid var
 @media (prefers-reduced-motion: reduce) { .game-hud .hud-action { transition: none; } }
 
 /* TV play keeps the table and a single, readable remote instruction strip. */
+body.compatibility-table :is(#viewMode, #camera, .camera-zoom) { display: none; }
 body.tv-mode footer.game-hud > :not(#tvControls),
 body.tv-mode .camera-zoom,
 body.tv-mode header.game-hud > #tableActions,

@@ -1,6 +1,8 @@
 import { GameAudio } from './audio';
 import { RemoteShot, remoteKey, remotePlacement, type RemoteKey } from './tv-controls';
 import { TvTable } from './tv-table';
+import { dismissDialog } from './tv-dialogs';
+import { installFullscreenControl } from './fullscreen';
 import { cueLength, cuePose } from './cue-geometry';
 import { traceShot } from './aim-guide';
 import { OnlineGame } from './online';
@@ -33,6 +35,7 @@ let tvPresentation = '';
 try { tvEnabled = localStorage.getItem('billiard-tv') === 'on'; } catch {}
 if (document.documentElement.dataset.tvChoice) tvEnabled = document.documentElement.dataset.tvChoice === 'on';
 const actionDescriptions: Record<string, string> = {
+  fullscreen: 'Hide browser navigation while you play',
   viewMode: 'Look around the table',
   camera: 'Switch between top-down and 3D',
   reset: 'Set up a fresh game',
@@ -45,6 +48,7 @@ for (const button of tableActions.querySelectorAll<HTMLButtonElement>('button'))
   description.textContent = actionDescriptions[button.id];
   button.append(description);
 }
+installFullscreenControl(document.querySelector<HTMLButtonElement>('#fullscreen')!, document.querySelector<HTMLElement>('#fullscreenNotice')!);
 function setMobileMenu(open: boolean, restoreFocus = false) {
   open = open && (mobileLayout.matches || tvEnabled);
   if (open && !menuDialog.open) {
@@ -95,11 +99,6 @@ menuDialog.addEventListener('cancel', event => {
 });
 menuDialog.addEventListener('close', () => {
   if (!menuDialog.open) setMobileMenu(false);
-});
-menuDialog.addEventListener('click', event => {
-  if (event.target !== menuDialog) return;
-  const bounds = menuDialog.getBoundingClientRect();
-  if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) setMobileMenu(false, true);
 });
 mobileLayout.addEventListener('change', () => setMobileMenu(false));
 const zoomSlider = document.querySelector<HTMLInputElement>('#cameraZoom')!;
@@ -176,11 +175,12 @@ const engine = (() => {
   try { return new Engine(canvas, true); }
   catch {
     webglUnavailable = true;
-    tvEnabled = true;
     return headless();
   }
 })();
 const headlessGraphics = engine instanceof NullEngine;
+function uses2dTable() { return tvEnabled || headlessGraphics; }
+function activeTableCanvas() { return uses2dTable() ? tvCanvas : canvas; }
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.045, 0.062, 0.057, 1);
 const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0.025, 2.5, Vector3.Zero(), scene);
@@ -761,8 +761,7 @@ viewToggle.onclick = () => {
 
 function aimAtPointer(event: PointerEvent, starting = false) {
   if (aimLocked || viewMode || rolling || strike || !canControl() || finished || strokePointer !== undefined) return;
-  const bounds = canvas.getBoundingClientRect();
-  const hit = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
+  const hit = tableHit(event);
   if (!hit) return;
   if (starting) {
     movingCueBall = Boolean(placement) && Math.hypot(hit.x - balls[0].x, hit.z - balls[0].z) <= 2.5 * radius;
@@ -782,71 +781,84 @@ function aimAtPointer(event: PointerEvent, starting = false) {
   if (next.lengthSquared() > radius * radius) aim = next.normalize();
 }
 
-canvas.addEventListener('pointerdown', event => {
-  if (viewMode || !canControl() || finished || strokePointer !== undefined || !event.isPrimary || event.button !== 0 || rolling || strike) return;
-  const bounds = canvas.getBoundingClientRect();
-  if (!snooker && legalTargets().includes(8)) {
-    const selected = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => pocketSelectors.some(selector => selector === mesh));
-    if (selected?.pickedMesh) {
-      calledPocket = pocketSelectors.findIndex(selector => selector === selected.pickedMesh);
-      showReadyStatus();
+function tableHit(event: PointerEvent, includeRails = false) {
+  const bounds = activeTableCanvas().getBoundingClientRect();
+  if (uses2dTable()) return tvTable?.pick(event.clientX - bounds.left, event.clientY - bounds.top, includeRails);
+  return scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
+}
+for (const controlCanvas of [canvas, tvCanvas]) {
+  controlCanvas.addEventListener('pointerdown', event => {
+    if (viewMode || !canControl() || finished || strokePointer !== undefined || !event.isPrimary || event.button !== 0 || rolling || strike) return;
+    const bounds = controlCanvas.getBoundingClientRect();
+    if (!snooker && legalTargets().includes(8)) {
+      if (uses2dTable()) {
+        const hit = tableHit(event, true);
+        const index = hit ? pockets.findIndex(p => Math.hypot(p.x - hit.x, p.z - hit.z) <= 0.09) : -1;
+        if (index >= 0) { calledPocket = index; showReadyStatus(); return; }
+      } else {
+        const selected = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => pocketSelectors.some(selector => selector === mesh));
+        if (selected?.pickedMesh) {
+          calledPocket = pocketSelectors.findIndex(selector => selector === selected.pickedMesh);
+          showReadyStatus();
+          return;
+        }
+      }
+    }
+    const hit = tableHit(event);
+    const cueTap = hit && Math.hypot(hit.x - balls[0].x, hit.z - balls[0].z) < 2.5 * radius;
+    if (cueTap && event.timeStamp - lastCueTap < 350 && lastCueTap > 0) {
+      toggleAimLock();
       return;
     }
+    lastCueTap = cueTap ? event.timeStamp : 0;
+    aimPointer = event.pointerId;
+    controlCanvas.setPointerCapture(event.pointerId);
+    movingCueBall = false;
+    if (aimLocked) {
+      const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+      const origin = new Vector3(balls[0].x, radius, balls[0].z);
+      const from = uses2dTable() ? tvTable!.project(origin.x, origin.z) : Vector3.Project(origin, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+      const to = uses2dTable() ? tvTable!.project(origin.x + aim.x, origin.z + aim.z) : Vector3.Project(origin.add(aim), Matrix.Identity(), scene.getTransformMatrix(), viewport);
+      const dx = (to.x - from.x) * (uses2dTable() ? 1 : bounds.width / engine.getRenderWidth());
+      const dy = (to.y - from.y) * (uses2dTable() ? 1 : bounds.height / engine.getRenderHeight());
+      const magnitude = Math.max(1, Math.hypot(dx, dy));
+      tableStroke = { x: event.clientX, y: event.clientY, dx: dx / magnitude, dy: dy / magnitude };
+      return;
+    }
+    aimAtPointer(event, true);
+  });
+  function updateTablePull(event: PointerEvent) {
+    if (!tableStroke) return;
+    pull = Math.max(0, Math.min(1, -((event.clientX - tableStroke.x) * tableStroke.dx + (event.clientY - tableStroke.y) * tableStroke.dy) / 110));
+    showPull();
   }
-  const hit = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
-  const cueTap = hit && Math.hypot(hit.x - balls[0].x, hit.z - balls[0].z) < 2.5 * radius;
-  if (cueTap && event.timeStamp - lastCueTap < 350 && lastCueTap > 0) {
-    toggleAimLock();
-    return;
-  }
-  lastCueTap = cueTap ? event.timeStamp : 0;
-  aimPointer = event.pointerId;
-  canvas.setPointerCapture(event.pointerId);
-  movingCueBall = false;
-  if (aimLocked) {
-    const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
-    const origin = new Vector3(balls[0].x, radius, balls[0].z);
-    const from = Vector3.Project(origin, Matrix.Identity(), scene.getTransformMatrix(), viewport);
-    const to = Vector3.Project(origin.add(aim), Matrix.Identity(), scene.getTransformMatrix(), viewport);
-    const dx = (to.x - from.x) * bounds.width / engine.getRenderWidth();
-    const dy = (to.y - from.y) * bounds.height / engine.getRenderHeight();
-    const magnitude = Math.max(1, Math.hypot(dx, dy));
-    tableStroke = { x: event.clientX, y: event.clientY, dx: dx / magnitude, dy: dy / magnitude };
-    return;
-  }
-  aimAtPointer(event, true);
-});
-function updateTablePull(event: PointerEvent) {
-  if (!tableStroke) return;
-  pull = Math.max(0, Math.min(1, -((event.clientX - tableStroke.x) * tableStroke.dx + (event.clientY - tableStroke.y) * tableStroke.dy) / 110));
-  showPull();
-}
-canvas.addEventListener('pointermove', event => {
-  if (aimPointer !== event.pointerId) return;
-  if (tableStroke) updateTablePull(event);
-  else aimAtPointer(event);
-});
-canvas.addEventListener('pointerup', event => {
-  if (aimPointer !== event.pointerId) return;
-  aimPointer = undefined;
-  if (tableStroke) {
-    updateTablePull(event);
-    const strength = pull;
+  controlCanvas.addEventListener('pointermove', event => {
+    if (aimPointer !== event.pointerId) return;
+    if (tableStroke) updateTablePull(event);
+    else aimAtPointer(event);
+  });
+  controlCanvas.addEventListener('pointerup', event => {
+    if (aimPointer !== event.pointerId) return;
+    aimPointer = undefined;
+    if (tableStroke) {
+      updateTablePull(event);
+      const strength = pull;
+      tableStroke = undefined;
+      clearStroke();
+      if (strength >= 0.08) fire(strength);
+      return;
+    }
+    aimAtPointer(event);
+    movingCueBall = false;
+  });
+  controlCanvas.addEventListener('lostpointercapture', event => {
+    if (aimPointer !== event.pointerId) return;
+    aimPointer = undefined;
+    movingCueBall = false;
     tableStroke = undefined;
     clearStroke();
-    if (strength >= 0.08) fire(strength);
-    return;
-  }
-  aimAtPointer(event);
-  movingCueBall = false;
-});
-canvas.addEventListener('lostpointercapture', event => {
-  if (aimPointer !== event.pointerId) return;
-  aimPointer = undefined;
-  movingCueBall = false;
-  tableStroke = undefined;
-  clearStroke();
-});
+  });
+}
 
 document.querySelector<HTMLButtonElement>('#camera')!.onclick = event => {
   overhead = !overhead;
@@ -1093,15 +1105,15 @@ showReadyStatus();
 
 function fitOverheadCamera() {
   if (!overhead || viewMode) return;
-  const bounds = (tvEnabled ? tvCanvas : canvas).getBoundingClientRect();
+  const bounds = activeTableCanvas().getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
   const header = document.querySelector('header')!.getBoundingClientRect();
   document.documentElement.style.setProperty('--notice-top', header.bottom + 8 + 'px');
   const footer = document.querySelector('footer')!.getBoundingClientRect();
-  if (tvEnabled) tvTable?.resize(bounds.width, bounds.height, header.bottom - bounds.top + 12, footer.top - bounds.top - 12);
+  if (uses2dTable()) tvTable?.resize(bounds.width, bounds.height, header.bottom - bounds.top + 12, footer.top - bounds.top - 12);
   // Phones keep the long axis vertical, including when held sideways.
   const mobile = window.matchMedia('(max-width: 600px), (pointer: coarse) and (max-height: 600px)').matches;
-  const landscape = (tvEnabled || !mobile) && bounds.width > bounds.height;
+  const landscape = (uses2dTable() || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
   const bottom = footer.top - bounds.top - 6;
   const availableHeight = Math.max(1, bottom - top);
@@ -1167,16 +1179,16 @@ function updateTvControls() {
 }
 function applyTvMode() {
   document.body.classList.toggle('tv-mode', tvEnabled);
+  document.body.classList.toggle('compatibility-table', webglUnavailable);
   tvPanel.hidden = !tvEnabled;
-  tvCanvas.hidden = !tvEnabled;
-  canvas.hidden = tvEnabled;
-  if (tvEnabled && !tvTable) tvTable = new TvTable(tvCanvas);
+  tvCanvas.hidden = !uses2dTable();
+  canvas.hidden = uses2dTable();
+  if (uses2dTable() && !tvTable) tvTable = new TvTable(tvCanvas);
   tvToggle.textContent = tvEnabled ? 'TV on' : 'TV off';
   tvToggle.setAttribute('aria-pressed', String(tvEnabled));
-  tvToggle.disabled = webglUnavailable;
   const compatibility = document.querySelector<HTMLElement>('#tvCompatibility')!;
   compatibility.hidden = !webglUnavailable;
-  compatibility.textContent = webglUnavailable ? 'Your browser could not start 3D. The TV table keeps the game playable.' : '';
+  compatibility.textContent = webglUnavailable ? 'This browser could not start 3D. The compatibility table is active; you can turn TV controls on or off.' : '';
   tvContext = '';
   if (tvEnabled) {
     if (viewMode) viewToggle.click();
@@ -1193,7 +1205,7 @@ function applyTvMode() {
 tvToggle.onclick = () => {
   tvEnabled = !tvEnabled;
   try { localStorage.setItem('billiard-tv', tvEnabled ? 'on' : 'off'); } catch {}
-  if (!tvEnabled && headlessGraphics) {
+  if (!tvEnabled && headlessGraphics && !webglUnavailable) {
     // The 3D scene needs a real engine. Restore this match after restarting it.
     saveGame();
     const url = new URL(location.href);
@@ -1206,7 +1218,7 @@ tvToggle.onclick = () => {
 document.querySelector<HTMLButtonElement>('#tvMenu')!.onclick = () => setMobileMenu(true);
 function navigateTvDialog(dialog: HTMLDialogElement, key: RemoteKey) {
   if (key === 'back') {
-    if (dialog.dispatchEvent(new Event('cancel', { cancelable: true }))) dialog.close();
+    dismissDialog(dialog);
     return;
   }
   const controls = [...dialog.querySelectorAll<HTMLElement>('button, input, select, a[href]')]
@@ -1232,11 +1244,12 @@ function navigateTvDialog(dialog: HTMLDialogElement, key: RemoteKey) {
   next?.scrollIntoView({ block: 'nearest' });
 }
 document.addEventListener('keydown', event => {
-  if (!tvEnabled) return;
+  if (!tvEnabled && !webglUnavailable) return;
   const key = remoteKey(event.key, event.keyCode);
   if (!key) return;
   const dialogs = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')];
   const dialog = dialogs.find(d => d.classList.contains('modal-child')) ?? dialogs[dialogs.length - 1];
+  if (!tvEnabled && !dialog) return;
   // Text fields keep normal typing and their platform's on-screen keyboard.
   if (dialog && event.target instanceof HTMLInputElement && !['range', 'checkbox', 'button'].includes(event.target.type) && event.key !== 'Escape' && key !== 'ok' && !['up', 'down'].includes(key) && event.keyCode !== 10009 && event.keyCode !== 461) return;
   event.preventDefault();
@@ -1380,7 +1393,7 @@ engine.runRenderLoop(() => {
       finishShot();
     }
   }
-  if (!tvEnabled) {
+  if (!uses2dTable()) {
     balls.forEach((ball, index) => {
       const mesh = ballMeshes[index];
       const dx = ball.x - mesh.position.x, dz = ball.z - mesh.position.z;
@@ -1423,11 +1436,11 @@ engine.runRenderLoop(() => {
   }
   sound.flush();
   updateSession(dt);
-  if (tvEnabled) tvTable?.draw({
+  if (uses2dTable()) tvTable?.draw({
     balls, aim, rolling, finished, placement: Boolean(placement), guides: guidesEnabled,
     callEligible: callEligible && canControl(), calledPocket, snooker,
     tableStyle: select('tableStyle').value, cueStyle: select('cueStyle').value,
-    pull: strike ? strike * shotPower * 5 : remote.stage === 'power' ? remote.power : 0,
+    pull: strike ? strike * shotPower * 5 : tvEnabled ? remote.stage === 'power' ? remote.power : 0 : pull,
   });
   else scene.render();
 });
