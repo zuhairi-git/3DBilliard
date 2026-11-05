@@ -11,7 +11,7 @@ import { validGame, type SavedGame } from './saved-game';
 import { constrainOrbit } from './camera-bounds';
 import {
   ArcRotateCamera, Camera, Color3, Color4, DirectionalLight, DynamicTexture, Engine, NullEngine,
-  HemisphericLight, ShadowGenerator, Matrix, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3,
+  HemisphericLight, ShadowGenerator, Matrix, Mesh, VertexData, MeshBuilder, Quaternion, Scene, StandardMaterial, Vector3,
 } from '@babylonjs/core';
 import { furnishRoom } from './room';
 import { chooseShot } from './opponent';
@@ -104,10 +104,7 @@ mobileLayout.addEventListener('change', () => setMobileMenu(false));
 const zoomSlider = document.querySelector<HTMLInputElement>('#cameraZoom')!;
 const zoomFit = document.querySelector<HTMLButtonElement>('#zoomFit')!;
 let cameraZoom = 1;
-try {
-  const saved = Number(localStorage.getItem('billiard-camera-zoom'));
-  if (Number.isFinite(saved) && saved >= 0.65 && saved <= 2.5) cameraZoom = saved;
-} catch {}
+// Start fitted; zoom remains adjustable during this visit.
 function zoomFov() { return 2 * Math.atan(Math.tan(1.1 / 2) / cameraZoom); }
 function showZoom() {
   zoomSlider.value = String(cameraZoom);
@@ -203,9 +200,9 @@ camera.wheelDeltaPercentage = 0.035;
 
 
 const ambient = new HemisphericLight('room fill', Vector3.Up(), scene);
-ambient.intensity = 0.64;
+ambient.intensity = 0.38;
 const lamp = new DirectionalLight('table light', new Vector3(-0.35, -1, 0.24), scene);
-lamp.intensity = 1.15;
+lamp.intensity = 0.95;
 lamp.position.set(1.2, 3.5, -1);
 lamp.diffuse = Color3.FromHexString("#fff0d6");
 ambient.groundColor = Color3.FromHexString("#34302a");
@@ -257,10 +254,15 @@ function weave() {
   const ctx = texture.getContext() as CanvasRenderingContext2D;
   ctx.fillStyle = '#d2d9d3';
   ctx.fillRect(0, 0, 1024, 1024);
-  for (let i = 0; i < 1024; i += 2) {
-    ctx.fillStyle = i % 4 ? '#ffffff18' : '#00000014';
-    ctx.fillRect(i, 0, 1, 1024);
-    ctx.fillRect(0, i, 1024, 1);
+  // Fine, low-contrast fibres avoid the enlarged checkerboard pattern.
+  let seed = 1427;
+  for (let i = 0; i < 65000; i++) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const x = (seed >>> 16) % 1024;
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const y = (seed >>> 16) % 1024;
+    ctx.fillStyle = i % 2 ? '#ffffff09' : '#00000007';
+    ctx.fillRect(x, y, 1, 1);
   }
   ctx.globalCompositeOperation = 'destination-out';
   ctx.fillStyle = '#000000';
@@ -316,7 +318,6 @@ for (const side of [-1, 1]) {
     const railLength = length / 2 - cornerOpening - 0.085;
     box('side rail', side * (width / 2 + 0.061), 0.018, railCenter, 0.122, 0.09, railLength, wood);
     box('rail edge inlay', side * (width / 2 + 0.114), 0.064, railCenter, 0.004, 0.002, railLength - 0.02, railLight);
-    box('side cushion', side * (width / 2 + 0.012), 0.039, railCenter, 0.034, 0.042, railLength, rubber);
   }
   box('end rail', 0, 0.018, side * (length / 2 + 0.061), width - 2 * cornerOpening, 0.09, 0.122, wood);
   box('end edge inlay', 0, 0.064, side * (length / 2 + 0.114), width - 2 * cornerOpening - 0.02, 0.002, 0.004, railLight);
@@ -324,7 +325,6 @@ for (const side of [-1, 1]) {
     const sight = box('end rail sight', x, 0.064, side * (length / 2 + 0.078), 0.012, 0.002, 0.012, pearl);
     sight.rotation.y = Math.PI / 4;
   }
-  box('end cushion', 0, 0.039, side * (length / 2 + 0.012), width - 2 * cornerOpening, 0.042, 0.034, rubber);
   for (const z of [-0.92, -0.63, -0.34, 0.34, 0.63, 0.92]) {
     const sight = box('rail sight', side * (width / 2 + 0.078), 0.064, z, 0.012, 0.002, 0.012, pearl);
     sight.rotation.y = Math.PI / 4;
@@ -359,13 +359,28 @@ for (const pocket of pockets) {
     mesh.material = finish;
     mesh.isPickable = false;
   };
-  lip('flush pocket leather', r, r + 0.009, 0.006, leather);
-  lip('inlaid pocket edge', r + 0.009, r + 0.012, 0.005, brass);
+  // A rail-height surround joins the neighbouring rails around a true opening.
+  const inner: Vector3[] = [], outer: Vector3[] = [];
+  for (let i = 0; i <= 64; i++) {
+    const angle = i * Math.PI / 32, dx = Math.cos(angle), dz = Math.sin(angle);
+    const reach = 0.135 / Math.max(Math.abs(dx), Math.abs(dz));
+    inner.push(new Vector3(pocket.x + dx * (r + 0.003), 0.061, pocket.z + dz * (r + 0.003)));
+    outer.push(new Vector3(
+      Math.max(-width / 2 - 0.122, Math.min(width / 2 + 0.122, pocket.x + dx * reach)), 0.061,
+      Math.max(-length / 2 - 0.122, Math.min(length / 2 + 0.122, pocket.z + dz * reach))));
+  }
+  // Only the outer half belongs to the rail; keep the playing surface unobstructed.
+  for (let i = 0; i < outer.length; i++) {
+    if (Math.abs(outer[i].x) < width / 2 && Math.abs(outer[i].z) < length / 2) outer[i] = inner[i].clone();
+  }
+  const surround = MeshBuilder.CreateRibbon('integrated pocket surround', { pathArray: [inner, outer], sideOrientation: 2 }, scene);
+  surround.material = wood; surround.isPickable = false; surround.receiveShadows = true;
+  lip('thin leather pocket edge', r, r + 0.003, 0.06, leather);
   const well = MeshBuilder.CreateCylinder('recessed pocket throat', {
-    height: 0.09, diameterTop: r * 2, diameterBottom: r * 1.55,
+    height: 0.094, diameterTop: r * 2, diameterBottom: r * 1.55,
     tessellation: 64, cap: 0, sideOrientation: 2,
   }, scene);
-  well.position.set(pocket.x, -0.04, pocket.z);
+  well.position.set(pocket.x, 0.014, pocket.z);
   well.material = leather;
   well.isPickable = false;
   const opening = MeshBuilder.CreateDisc('dark pocket bottom', { radius: r, tessellation: 64, sideOrientation: 2 }, scene);
@@ -374,23 +389,39 @@ for (const pocket of pockets) {
   opening.material = dark;
   opening.isPickable = false;
 }
-// Carry the cushion faces into each pocket, stopping at the recessed mouth.
-for (const jaw of cushions.filter(c => c.jaw)) {
-  const pocket = pockets.reduce((nearest, p) =>
-    Math.hypot(p.x - jaw.bx, p.z - jaw.bz) < Math.hypot(nearest.x - jaw.bx, nearest.z - jaw.bz) ? p : nearest);
-  const r = pocketMouthRadius(pocket) + 0.008;
-  let low = 0, high = 1;
-  for (let i = 0; i < 20; i++) {
-    const t = (low + high) / 2;
-    const distance = Math.hypot(jaw.ax + (jaw.bx - jaw.ax) * t - pocket.x, jaw.az + (jaw.bz - jaw.az) * t - pocket.z);
-    if (distance > r) low = t; else high = t;
+// One continuous beveled cushion per rail, with mitered pocket approaches.
+for (const c of cushions.filter(c => !c.jaw)) {
+  const distance = Math.hypot(c.bx - c.ax, c.bz - c.az);
+  const tx = (c.bx - c.ax) / distance, tz = (c.bz - c.az) / distance;
+  const nx = c.ax === c.bx ? Math.sign(c.ax) : 0;
+  const nz = c.az === c.bz ? Math.sign(c.az) : 0;
+  const outline = [
+    [c.ax, 0.028, c.az], [c.bx, 0.028, c.bz],
+    [c.bx + nx * 0.055 + tx * 0.035, 0.063, c.bz + nz * 0.055 + tz * 0.035],
+    [c.ax + nx * 0.055 - tx * 0.035, 0.063, c.az + nz * 0.055 - tz * 0.035],
+  ];
+  const positions = [...outline.flat(), ...outline.flatMap(([x, , z]) => [x, 0.005, z])];
+  const indices = [0, 1, 2, 0, 2, 3];
+  for (let i = 0; i < 4; i++) {
+    const next = (i + 1) % 4;
+    indices.push(i, i + 4, next + 4, i, next + 4, next);
   }
-  const bx = jaw.ax + (jaw.bx - jaw.ax) * low;
-  const bz = jaw.az + (jaw.bz - jaw.az) * low;
-  const face = box('angled cushion jaw', (jaw.ax + bx) / 2, 0.025, (jaw.az + bz) / 2,
-    0.018, 0.04, Math.hypot(bx - jaw.ax, bz - jaw.az), rubber);
-  face.rotation.y = Math.atan2(bx - jaw.ax, bz - jaw.az);
+  const normals: number[] = [];
+  VertexData.ComputeNormals(positions, indices, normals);
+  if (normals[1] < 0) {
+    for (let i = 0; i < indices.length; i += 3) [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
+    VertexData.ComputeNormals(positions, indices, normals);
+  }
+  const data = new VertexData();
+  data.positions = positions; data.indices = indices; data.normals = normals;
+  const mesh = new Mesh('continuous beveled cushion', scene);
+  data.applyToMesh(mesh);
+  mesh.material = rubber;
+  mesh.isPickable = false;
+  mesh.receiveShadows = true;
+  shadows.addShadowCaster(mesh);
 }
+rubber.backFaceCulling = false;
 
 const palette = ['#ffcb24', '#246fe5', '#ed354e', '#9552d8', '#ff8624', '#20ac77', '#a53657', '#101522'];
 const ballMeshes = rack(true).map((_, index) => {
