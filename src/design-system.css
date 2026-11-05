@@ -1,15 +1,15 @@
 :root {
   color-scheme: dark;
-  --surface: #101814;
-  --panel: #17231d;
-  --control: #263e32;
-  --hover: #345443;
-  --text: #f2eddf;
-  --muted: #bacac0;
-  --accent: #e8bd72;
-  --on-accent: #241a0d;
+  --surface: #080f20;
+  --panel: #101e34;
+  --control: #1d3451;
+  --hover: #29496b;
+  --text: #f3f7ff;
+  --muted: #a4b8d3;
+  --accent: #63ddf1;
+  --on-accent: #082337;
   --border: #ffffff25;
-  --scrim: #080d0acc;
+  --scrim: #030916cc;
   --font: 15px system-ui, sans-serif;
   --radius: 9px;
   --panel-radius: 16px;

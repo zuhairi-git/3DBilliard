@@ -84,15 +84,15 @@ export class TvTable {
       ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
     };
     ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
-    ctx.fillStyle = '#101b16'; ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
+    ctx.fillStyle = '#080f20'; ctx.fillRect(0, 0, this.screenWidth, this.screenHeight);
     const finishes: Record<string, string[]> = {
-      'Club Green': ['#23735a', '#184739', '#43271b'],
-      'Tournament Blue': ['#286594', '#174464', '#25282d'],
-      'Burgundy Lounge': ['#913b4e', '#612b3c', '#523121'],
+      'Club Green': ['#199d85', '#116858', '#182e35'],
+      'Tournament Blue': ['#258bd0', '#125283', '#182b43'],
+      'Burgundy Lounge': ['#b44876', '#742c54', '#30233c'],
     };
-    const [felt, cushion, wood] = finishes[state.tableStyle] ?? finishes['Club Green'];
+    const [felt, cushion, wood] = finishes[state.tableStyle] ?? finishes['Tournament Blue'];
     rectangle(width + 0.30, length + 0.30, '#0a100d');
-    rectangle(width + 0.27, length + 0.27, '#bca074');
+    rectangle(width + 0.27, length + 0.27, '#63ddf1');
     rectangle(width + 0.25, length + 0.25, wood);
     rectangle(width + 0.04, length + 0.04, cushion);
     rectangle(width, length, felt);
@@ -106,8 +106,10 @@ export class TvTable {
     ctx.globalAlpha = 1;
     for (let i = 0; i < pockets.length; i++) {
       const p = pockets[i];
-      circle(p.x, p.z, 0.077, '#211916');
-      circle(p.x, p.z, 0.064, '#030605', state.callEligible ? state.calledPocket === i ? '#ffe3a1' : '#bca074' : undefined);
+      const mouth = p.z === 0 ? 0.067 : 0.085;
+      circle(p.x, p.z, mouth + 0.012, '#c5ab79');
+      circle(p.x, p.z, mouth + 0.009, '#21191c');
+      circle(p.x, p.z, mouth, '#030305', state.callEligible ? state.calledPocket === i ? '#ffe3a1' : '#63ddf1' : undefined);
       if (state.callEligible) {
         const label = point(p.x, p.z);
         ctx.fillStyle = state.calledPocket === i ? '#ffe3a1' : '#d6c49f';

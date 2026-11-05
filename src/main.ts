@@ -15,7 +15,7 @@ import {
 } from '@babylonjs/core';
 import { furnishRoom } from './room';
 import { chooseShot } from './opponent';
-import { isMoving, length, pockets, rack, radius, shotSpeed, step, strikeBall, width } from './physics';
+import { cushions, cornerOpening, isMoving, length, pockets, rack, radius, shotSpeed, step, strikeBall, width } from './physics';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#table')!;
 const tvCanvas = document.querySelector<HTMLCanvasElement>('#tvTable')!;
@@ -182,7 +182,7 @@ const headlessGraphics = engine instanceof NullEngine;
 function uses2dTable() { return tvEnabled || headlessGraphics; }
 function activeTableCanvas() { return uses2dTable() ? tvCanvas : canvas; }
 const scene = new Scene(engine);
-scene.clearColor = new Color4(0.045, 0.062, 0.057, 1);
+scene.clearColor = new Color4(0.025, 0.045, 0.09, 1);
 const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0.025, 2.5, Vector3.Zero(), scene);
 camera.lowerRadiusLimit = 0.7;
 camera.lowerBetaLimit = 0.025;
@@ -211,8 +211,10 @@ lamp.diffuse = Color3.FromHexString("#fff0d6");
 ambient.groundColor = Color3.FromHexString("#34302a");
 const shadows = new ShadowGenerator(1024, lamp);
 shadows.useBlurExponentialShadowMap = true;
-shadows.blurKernel = 16;
-shadows.darkness = 0.30;
+shadows.blurKernel = 10;
+shadows.darkness = 0.22;
+shadows.bias = 0.0003;
+shadows.normalBias = 0.002;
 
 function material(name: string, hex: string, shine = 0.03) {
   const m = new StandardMaterial(name, scene);
@@ -221,18 +223,22 @@ function material(name: string, hex: string, shine = 0.03) {
   m.specularPower = 80;
   return m;
 }
-const wood = material('walnut', '#63452e', 0.34);
-const cloth = material('green baize', '#23735a');
-const rubber = material('cushion', '#184739');
-const leather = material('pocket leather', '#211916', 0.14);
-const dark = material('pocket interior', '#090909');
-const brass = material('brass', '#bca074', 0.65);
+const wood = material('graphite satin rails', '#182b43', 0.52);
+const cloth = material('azure tournament cloth', '#258bd0');
+const rubber = material('cushion', '#125283');
+const leather = material('pocket leather', '#101b2a', 0.14);
+const dark = material('pocket interior', '#020204', 0);
+dark.disableLighting = true;
+dark.emissiveColor = Color3.FromHexString('#020204');
+const brass = material('champagne metal', '#dfc48d', 0.65);
 const pocketCallMaterial = material('called pocket marker', '#e8bd72');
 pocketCallMaterial.disableLighting = true;
 pocketCallMaterial.emissiveColor = Color3.FromHexString('#e8bd72');
 const pearl = material('mother of pearl sights', '#e8dfc9', 0.4);
-const trim = material('ebony frame accents', '#201e1b', 0.3);
-const floor = material('room floor', '#202923');
+const trim = material('frame accents', '#0a1220', 0.3);
+const floor = material('room floor', '#0b1427');
+const railLight = material('illuminated rail detail', '#3bd9ef');
+railLight.emissiveColor = Color3.FromHexString('#16758a');
 
 function box(name: string, x: number, y: number, z: number, w: number, h: number, d: number, m: StandardMaterial) {
   const mesh = MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene);
@@ -243,6 +249,8 @@ function box(name: string, x: number, y: number, z: number, w: number, h: number
   shadows.addShadowCaster(mesh);
   return mesh;
 }
+
+const pocketMouthRadius = (pocket: { z: number }) => pocket.z === 0 ? 0.067 : 0.085;
 
 function weave() {
   const texture = new DynamicTexture('cloth weave', 1024, scene, true);
@@ -261,7 +269,7 @@ function weave() {
     ctx.translate((pocket.x / width + 0.5) * 1024, (pocket.z / length + 0.5) * 1024);
     ctx.scale(1024 / width, 1024 / length);
     ctx.beginPath();
-    ctx.arc(0, 0, 0.067, 0, Math.PI * 2);
+    ctx.arc(0, 0, pocketMouthRadius(pocket), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -273,8 +281,8 @@ function weave() {
 if (!headlessGraphics) {
   cloth.diffuseTexture = weave();
   cloth.bumpTexture = weave();
-  cloth.bumpTexture.level = 0.12;
-  furnishRoom(scene, wood, brass);
+  cloth.bumpTexture.level = 0.045;
+  furnishRoom(scene, material('room walnut', '#63452e', 0.34), brass);
 }
 box('floor', 0, -0.79, 0, 15, 0.04, 15, floor);
 box('cabinet', 0, -0.20, 0, width + 0.24, 0.20, length + 0.22, wood);
@@ -304,18 +312,19 @@ bed.receiveShadows = true;
 bed.isPickable = true;
 for (const side of [-1, 1]) {
   for (const end of [-1, 1]) {
-    const railCenter = end * (0.085 + length / 2 - 0.12) / 2;
-    box('side rail', side * (width / 2 + 0.061), 0.018, railCenter, 0.122, 0.09, length / 2 - 0.205, wood);
-    box('rail edge inlay', side * (width / 2 + 0.114), 0.064, railCenter, 0.004, 0.002, length / 2 - 0.225, brass);
-    box('side cushion', side * (width / 2 + 0.012), 0.039, railCenter, 0.034, 0.042, length / 2 - 0.205, rubber);
+    const railCenter = end * (0.085 + length / 2 - cornerOpening) / 2;
+    const railLength = length / 2 - cornerOpening - 0.085;
+    box('side rail', side * (width / 2 + 0.061), 0.018, railCenter, 0.122, 0.09, railLength, wood);
+    box('rail edge inlay', side * (width / 2 + 0.114), 0.064, railCenter, 0.004, 0.002, railLength - 0.02, railLight);
+    box('side cushion', side * (width / 2 + 0.012), 0.039, railCenter, 0.034, 0.042, railLength, rubber);
   }
-  box('end rail', 0, 0.018, side * (length / 2 + 0.061), width - 0.24, 0.09, 0.122, wood);
-  box('end edge inlay', 0, 0.064, side * (length / 2 + 0.114), width - 0.26, 0.002, 0.004, brass);
+  box('end rail', 0, 0.018, side * (length / 2 + 0.061), width - 2 * cornerOpening, 0.09, 0.122, wood);
+  box('end edge inlay', 0, 0.064, side * (length / 2 + 0.114), width - 2 * cornerOpening - 0.02, 0.002, 0.004, railLight);
   for (const x of [-0.31, 0, 0.31]) {
     const sight = box('end rail sight', x, 0.064, side * (length / 2 + 0.078), 0.012, 0.002, 0.012, pearl);
     sight.rotation.y = Math.PI / 4;
   }
-  box('end cushion', 0, 0.039, side * (length / 2 + 0.012), width - 0.24, 0.042, 0.034, rubber);
+  box('end cushion', 0, 0.039, side * (length / 2 + 0.012), width - 2 * cornerOpening, 0.042, 0.034, rubber);
   for (const z of [-0.92, -0.63, -0.34, 0.34, 0.63, 0.92]) {
     const sight = box('rail sight', side * (width / 2 + 0.078), 0.064, z, 0.012, 0.002, 0.012, pearl);
     sight.rotation.y = Math.PI / 4;
@@ -338,34 +347,60 @@ const pocketCallRings = pockets.map(pocket => {
   ring.isVisible = false;
   return ring;
 });
+// Flat lips surround recessed, tapered wells; corners have wider mouths.
 for (const pocket of pockets) {
-  const rim = MeshBuilder.CreateTorus('pocket rim', { diameter: 0.145, thickness: 0.017, tessellation: 32 }, scene);
-  rim.position.set(pocket.x, 0.018, pocket.z);
-  rim.material = leather;
-  rim.isPickable = false;
-  const piping = MeshBuilder.CreateTorus('pocket seam', { diameter: 0.153, thickness: 0.002, tessellation: 32 }, scene);
-  piping.position.set(pocket.x, 0.022, pocket.z);
-  piping.material = pearl;
-  piping.isPickable = false;
-  const well = MeshBuilder.CreateCylinder('pocket liner', { height: 0.095, diameter: 0.132, tessellation: 32, cap: 0, sideOrientation: 2 }, scene);
-  well.position.set(pocket.x, -0.035, pocket.z);
+  const r = pocketMouthRadius(pocket);
+  const lip = (name: string, inner: number, outer: number, y: number, finish: StandardMaterial) => {
+    const paths = [inner, outer].map(size => Array.from({ length: 65 }, (_, i) => {
+      const angle = i * Math.PI / 32;
+      return new Vector3(pocket.x + Math.cos(angle) * size, y, pocket.z + Math.sin(angle) * size);
+    }));
+    const mesh = MeshBuilder.CreateRibbon(name, { pathArray: paths, sideOrientation: 2 }, scene);
+    mesh.material = finish;
+    mesh.isPickable = false;
+  };
+  lip('flush pocket leather', r, r + 0.009, 0.006, leather);
+  lip('inlaid pocket edge', r + 0.009, r + 0.012, 0.005, brass);
+  const well = MeshBuilder.CreateCylinder('recessed pocket throat', {
+    height: 0.09, diameterTop: r * 2, diameterBottom: r * 1.55,
+    tessellation: 64, cap: 0, sideOrientation: 2,
+  }, scene);
+  well.position.set(pocket.x, -0.04, pocket.z);
   well.material = leather;
   well.isPickable = false;
-  const opening = MeshBuilder.CreateDisc('pocket opening', { radius: 0.067, tessellation: 32 }, scene);
+  const opening = MeshBuilder.CreateDisc('dark pocket bottom', { radius: r, tessellation: 64, sideOrientation: 2 }, scene);
   opening.rotation.x = Math.PI / 2;
-  opening.position.set(pocket.x, -0.08, pocket.z);
+  opening.position.set(pocket.x, -0.086, pocket.z);
   opening.material = dark;
   opening.isPickable = false;
 }
+// Carry the cushion faces into each pocket, stopping at the recessed mouth.
+for (const jaw of cushions.filter(c => c.jaw)) {
+  const pocket = pockets.reduce((nearest, p) =>
+    Math.hypot(p.x - jaw.bx, p.z - jaw.bz) < Math.hypot(nearest.x - jaw.bx, nearest.z - jaw.bz) ? p : nearest);
+  const r = pocketMouthRadius(pocket) + 0.008;
+  let low = 0, high = 1;
+  for (let i = 0; i < 20; i++) {
+    const t = (low + high) / 2;
+    const distance = Math.hypot(jaw.ax + (jaw.bx - jaw.ax) * t - pocket.x, jaw.az + (jaw.bz - jaw.az) * t - pocket.z);
+    if (distance > r) low = t; else high = t;
+  }
+  const bx = jaw.ax + (jaw.bx - jaw.ax) * low;
+  const bz = jaw.az + (jaw.bz - jaw.az) * low;
+  const face = box('angled cushion jaw', (jaw.ax + bx) / 2, 0.025, (jaw.az + bz) / 2,
+    0.018, 0.04, Math.hypot(bx - jaw.ax, bz - jaw.az), rubber);
+  face.rotation.y = Math.atan2(bx - jaw.ax, bz - jaw.az);
+}
 
-const palette = ['#e8ad20', '#174ea3', '#be322e', '#634082', '#e77528', '#287352', '#77292c', '#161719'];
+const palette = ['#ffcb24', '#246fe5', '#ed354e', '#9552d8', '#ff8624', '#20ac77', '#a53657', '#101522'];
 const ballMeshes = rack(true).map((_, index) => {
-  const mesh = MeshBuilder.CreateSphere('ball ' + index, { diameter: 2 * radius, segments: 24 }, scene);
+  const mesh = MeshBuilder.CreateSphere('ball ' + index, { diameter: 2 * radius, segments: 48 }, scene);
   shadows.addShadowCaster(mesh);
   const finish = material('polished resin ' + index, '#ffffff', 0.95);
+  finish.specularPower = 150;
   mesh.material = finish;
   mesh.isPickable = false;
-  mesh.rotationQuaternion = Quaternion.Identity();
+  mesh.rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), Math.PI / 2);
   mesh.isVisible = index < 16;
   if (headlessGraphics) return mesh;
   const texture = new DynamicTexture('ball markings ' + index, { width: 512, height: 256 }, scene, true);
@@ -378,15 +413,15 @@ const ballMeshes = rack(true).map((_, index) => {
   }
   for (const x of [128, 384]) {
     ctx.beginPath();
-    ctx.arc(x, 128, index === 0 ? 6 : 33, 0, Math.PI * 2);
+    ctx.arc(x, 128, index === 0 ? 6 : 40, 0, Math.PI * 2);
     ctx.fillStyle = index === 0 ? '#a6342c' : '#f6eedc';
     ctx.fill();
     if (index) {
       ctx.fillStyle = '#131719';
-      ctx.font = 'bold 35px sans-serif';
-  
-  
-      ctx.fillText(String(index), x - ctx.measureText(String(index)).width / 2, 140);
+      ctx.font = 'bold 43px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(index), x, 130);
     }
   }
   texture.update();
@@ -400,8 +435,10 @@ const colourFinishes = ["#e5bb25", "#26754d", "#754735", "#275d9e", "#e885a3", "
 
 const contact = new DynamicTexture('soft contact', 64, scene, true);
 const ctx = contact.getContext();
-const gradient = ctx.createRadialGradient(32, 32, 4, 32, 32, 31);
-gradient.addColorStop(0, '#000000a8');
+const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 31);
+gradient.addColorStop(0, '#020918b8');
+gradient.addColorStop(0.30, '#02091880');
+gradient.addColorStop(0.62, '#02091824');
 gradient.addColorStop(1, '#00000000');
 ctx.fillStyle = gradient;
 ctx.fillRect(0, 0, 64, 64);
@@ -413,7 +450,7 @@ shadow.disableLighting = true;
 shadow.diffuseTexture = contact;
 shadow.useAlphaFromDiffuseTexture = true;
 const contacts = ballMeshes.map(() => {
-  const mesh = MeshBuilder.CreateGround('contact', { width: 0.105, height: 0.105 }, scene);
+  const mesh = MeshBuilder.CreateGround('contact', { width: radius * 3, height: radius * 3 }, scene);
   mesh.material = shadow;
   mesh.isVisible = false;
   mesh.isPickable = false;
@@ -518,7 +555,7 @@ function respot(index: number) {
   }
   Object.assign(balls[index], spot, { z });
   ballMeshes[index].position.set(spot.x, radius, z);
-  ballMeshes[index].rotationQuaternion = Quaternion.Identity();
+  ballMeshes[index].rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), Math.PI / 2);
 }
 
 function finishShot() {
@@ -602,6 +639,10 @@ let strokePointer: number | undefined;
 let strokeStart = 0;
 const tip = document.querySelector<HTMLButtonElement>("#tip")!;
 const mark = document.querySelector<HTMLElement>("#tipMark")!;
+const spinDialog = document.querySelector<HTMLDialogElement>('#spinDialog')!;
+const spinBall = document.querySelector<HTMLButtonElement>('#spinBall')!;
+const spinMark = document.querySelector<HTMLElement>('#spinMark')!;
+const spinValue = document.querySelector<HTMLOutputElement>('#spinValue')!;
 const stroke = document.querySelector<HTMLButtonElement>("#stroke")!;
 const powerValue = document.querySelector<HTMLOutputElement>("#powerValue")!;
 function showPull() {
@@ -616,22 +657,39 @@ function setTip(x: number, y: number) {
   tipY = y / limit;
   mark.style.left = (50 + tipX * 50) + "%";
   mark.style.top = (50 - tipY * 50) + "%";
+  spinMark.style.left = mark.style.left;
+  spinMark.style.top = mark.style.top;
+  const horizontal = Math.abs(tipX) < 0.02 ? '' : Math.round(Math.abs(tipX) * 100) + '% ' + (tipX < 0 ? 'left' : 'right');
+  const vertical = Math.abs(tipY) < 0.02 ? '' : Math.round(Math.abs(tipY) * 100) + '% ' + (tipY > 0 ? 'follow' : 'draw');
+  spinValue.value = [horizontal, vertical].filter(Boolean).join(' · ') || 'Center ball · No spin';
+  spinBall.setAttribute('aria-label', spinValue.value + '. Arrow keys adjust; Home resets to center.');
   tip.title = "Contact offset: " + Math.round(tipX * 100) + "% horizontal, " + Math.round(tipY * 100) + "% vertical";
 }
 setTip(0, 0);
 function selectTip(event: PointerEvent) {
-  const bounds = tip.getBoundingClientRect();
+  const bounds = spinBall.getBoundingClientRect();
   setTip(2 * (event.clientX - bounds.left) / bounds.width - 1, 1 - 2 * (event.clientY - bounds.top) / bounds.height);
 }
-tip.onpointerdown = event => {
+tip.onclick = () => {
+  if (!canControl() || rolling || strike || strokePointer !== undefined) return;
+  spinDialog.showModal();
+  tip.setAttribute('aria-expanded', 'true');
+};
+spinDialog.addEventListener('close', () => {
+  tip.setAttribute('aria-expanded', 'false');
+  tip.focus();
+});
+for (const id of ['closeSpin', 'applySpin']) document.getElementById(id)!.onclick = () => spinDialog.close();
+document.getElementById('resetSpin')!.onclick = () => setTip(0, 0);
+spinBall.onpointerdown = event => {
   if (!canControl() || !event.isPrimary || event.button !== 0 || rolling || strike || strokePointer !== undefined) return;
-  tip.setPointerCapture(event.pointerId);
+  spinBall.setPointerCapture(event.pointerId);
   selectTip(event);
 };
-tip.onpointermove = event => {
-  if (!rolling && !strike && strokePointer === undefined && tip.hasPointerCapture(event.pointerId)) selectTip(event);
+spinBall.onpointermove = event => {
+  if (canControl() && !rolling && !strike && strokePointer === undefined && spinBall.hasPointerCapture(event.pointerId)) selectTip(event);
 };
-tip.onkeydown = event => {
+spinBall.onkeydown = event => {
   if (!canControl() || rolling || strike || strokePointer !== undefined) return;
   const offsets: Record<string, [number, number]> = { ArrowLeft: [-0.1, 0], ArrowRight: [0.1, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] };
   const offset = offsets[event.key];
@@ -639,6 +697,7 @@ tip.onkeydown = event => {
   else if (offset) setTip(tipX + offset[0], tipY + offset[1]);
   else return;
   event.preventDefault();
+  event.stopPropagation();
 };
 function fire(strength: number) {
   if (rolling || strike) return;
@@ -731,6 +790,16 @@ fineAim.onkeydown = event => {
   event.preventDefault();
   adjustFineAim((event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 0.02 : 0.1));
 };
+document.addEventListener('keydown', event => {
+  if (event.defaultPrevented || tvEnabled || event.ctrlKey || event.altKey || event.metaKey || document.querySelector('dialog[open]')) return;
+  if ((event.target as Element)?.closest('input, select, textarea, [contenteditable="true"]')) return;
+  if (!canFineAim() || aimPointer !== undefined) return;
+  const direction = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -1, ArrowDown: 1 }[event.key];
+  if (!direction) return;
+  event.preventDefault();
+  const fine = event.shiftKey || event.key === 'ArrowUp' || event.key === 'ArrowDown';
+  adjustFineAim(direction * (fine ? 0.1 : 1));
+});
 const pocketChoice = document.querySelector<HTMLSelectElement>('#pocketChoice')!;
 pocketChoice.onchange = () => {
   if (!canControl() || rolling || strike || !legalTargets().includes(8)) return;
@@ -770,7 +839,7 @@ function showReadyStatus() {
     status.textContent = placement === 'break' ? 'Drag the cue ball behind the head string. Aim on the cloth.' : 'Ball in hand. Drag the cue ball or aim on the cloth.';
     return;
   }
-  status.textContent = viewMode ? 'Drag to orbit. Pinch or scroll to zoom.' : window.matchMedia('(pointer: coarse)').matches ? playerName(turn) + ' · Tap to aim, slide Fine aim, then pull the cue to shoot.' : playerName(turn) + ' to shoot · Aim, then double-tap the cue ball to lock.';
+  status.textContent = viewMode ? 'Drag to orbit. Pinch or scroll to zoom.' : window.matchMedia('(pointer: coarse)').matches ? playerName(turn) + ' · Tap to aim, slide Fine aim, then pull the cue to shoot.' : playerName(turn) + ' · ← → Aim · Shift + arrows for fine aim';
 }
 
 viewToggle.onclick = () => {
@@ -941,7 +1010,7 @@ function resetMatch() {
     if (!ball) return;
     mesh.material = snooker && index > 0 ? (index <= 15 ? redFinish : colourFinishes[index - 16]) : poolFinishes[index];
     mesh.position.set(ball.x, radius, ball.z);
-    mesh.rotationQuaternion = Quaternion.Identity();
+    mesh.rotationQuaternion = Quaternion.RotationAxis(Vector3.Right(), Math.PI / 2);
   });
 }
 function needsRerackConfirmation() {
@@ -1003,9 +1072,9 @@ const cueStyles: Record<string, [string, string]> = {
   'Carbon Black': ['#525762', '#171b23'],
 };
 const tableStyles: Record<string, [string, string, string]> = {
-  'Club Green': ['#23735a', '#184739', '#43271b'],
-  'Tournament Blue': ['#286594', '#174464', '#25282d'],
-  'Burgundy Lounge': ['#913b4e', '#612b3c', '#523121'],
+  'Club Green': ['#199d85', '#116858', '#182e35'],
+  'Tournament Blue': ['#258bd0', '#125283', '#182b43'],
+  'Burgundy Lounge': ['#b44876', '#742c54', '#30233c'],
 };
 select('cueStyle').onchange = () => {
   const [shaft, butt] = cueStyles[select('cueStyle').value];
@@ -1147,7 +1216,9 @@ function fitOverheadCamera() {
   const mobile = window.matchMedia('(max-width: 600px), (pointer: coarse) and (max-height: 600px)').matches;
   const landscape = (uses2dTable() || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
-  const bottom = footer.top - bounds.top - 6;
+  document.documentElement.style.setProperty('--shot-controls-height', bounds.bottom - footer.top + 'px');
+  const zoomTop = mobileLayout.matches && !uses2dTable() ? document.querySelector('.camera-zoom')!.getBoundingClientRect().top : footer.top;
+  const bottom = Math.min(footer.top, zoomTop) - bounds.top - 6;
   const availableHeight = Math.max(1, bottom - top);
   const availableWidth = Math.max(1, bounds.width - 16);
   const tableWidth = (landscape ? length : width) + 0.27;
@@ -1379,6 +1450,7 @@ engine.runRenderLoop(() => {
   });
   stroke.disabled = rolling || strike > 0 || !canControl() || finished;
   tip.disabled = stroke.disabled;
+  if (tip.disabled && spinDialog.open) spinDialog.close();
   lockButton.disabled = stroke.disabled || viewMode;
   fineAim.disabled = !canFineAim();
   lockButton.querySelector<HTMLElement>('.hud-label')!.textContent = aimLocked ? 'Locked' : 'Aim lock';

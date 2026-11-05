@@ -1,6 +1,7 @@
-export const radius = 0.028575;
+export const radius = 0.035;
 export const width = 1.27;
 export const length = 2.54;
+export const cornerOpening = 0.13;
 export const pockets = [-1, 1].flatMap(side =>
   [-1, 0, 1].map(end => ({
     x: side * (width / 2 + (end === 0 ? 0.024 : 0.016)),
@@ -60,16 +61,16 @@ for (const side of [-1, 1]) {
   const x = side * (width / 2 - 0.005);
   const z = side * (length / 2 - 0.005);
   for (const end of [-1, 1]) {
-    cushions.push({ ax: x, az: end * 0.085, bx: x, bz: end * (length / 2 - 0.12) });
+    cushions.push({ ax: x, az: end * 0.085, bx: x, bz: end * (length / 2 - cornerOpening) });
   }
-  cushions.push({ ax: -width / 2 + 0.12, az: z, bx: width / 2 - 0.12, bz: z });
+  cushions.push({ ax: -width / 2 + cornerOpening, az: z, bx: width / 2 - cornerOpening, bz: z });
   // Angled jaws funnel balls into the wells instead of leaving gaps into the room.
   const sidePocket = pockets.find(p => Math.sign(p.x) === side && p.z === 0)!;
   for (const end of [-1, 1]) {
-    cushions.push({ ax: x, az: end * 0.085, bx: sidePocket.x + side * 0.04, bz: end * 0.035, jaw: true });
+    cushions.push({ ax: x, az: end * 0.085, bx: sidePocket.x + side * 0.04, bz: end * 0.045, jaw: true });
     const corner = pockets.find(p => Math.sign(p.x) === side && Math.sign(p.z) === end)!;
-    cushions.push({ ax: x, az: end * (length / 2 - 0.12), bx: corner.x + side * 0.04, bz: corner.z - end * 0.035, jaw: true });
-    cushions.push({ ax: side * (width / 2 - 0.12), az: end * (length / 2 - 0.005), bx: corner.x - side * 0.035, bz: corner.z + end * 0.04, jaw: true });
+    cushions.push({ ax: x, az: end * (length / 2 - cornerOpening), bx: corner.x + side * 0.04, bz: corner.z - end * 0.035, jaw: true });
+    cushions.push({ ax: side * (width / 2 - cornerOpening), az: end * (length / 2 - 0.005), bx: corner.x - side * 0.035, bz: corner.z + end * 0.04, jaw: true });
   }
 }
 
@@ -107,7 +108,7 @@ function guardBall(ball: Ball) {
   ball.sideSpin = Math.max(-200, Math.min(200, ball.sideSpin));
   // Last-resort containment: pocket throats may extend behind the cloth edge,
   // but no active ball may cross the outside of the frame, even after a bad input.
-  const inMouth = pockets.some(p => Math.hypot(p.x - ball.x, p.z - ball.z) < 0.12);
+  const inMouth = pockets.some(p => Math.hypot(p.x - ball.x, p.z - ball.z) < cornerOpening);
   const xLimit = inMouth ? width / 2 + 0.04 : width / 2 - radius - 0.005;
   const zLimit = inMouth ? length / 2 + 0.04 : length / 2 - radius - 0.005;
   if (Math.abs(ball.x) > xLimit) {

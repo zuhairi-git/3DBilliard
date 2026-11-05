@@ -34,11 +34,11 @@ export function furnishRoom(scene: Scene, wood: StandardMaterial, brass: Standar
   grain.update();
   wood.diffuseTexture = grain;
   const plaster = finish('sand limewash', '#938b7c');
-  const stone = finish('warm limestone', '#837d72');
+  const stone = finish('warm limestone', '#182438');
   const charcoal = finish('charcoal architectural metal', '#24282a');
   const ceiling = finish('soft ivory ceiling', '#c4bbac');
   const fabric = finish('linen upholstery', '#b2a18b');
-  const rug = finish('oatmeal woven rug', '#6e6b60');
+  const rug = finish('oatmeal woven rug', '#12283d');
   const roomWalnut = finish('smoked oak joinery', '#64513e');
   roomWalnut.diffuseTexture = grain;
   const glow = finish('warm concealed lighting', '#ffe0a6');

@@ -271,6 +271,31 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 .photo-picker { display: inline-flex; align-items: center; position: relative; overflow: hidden; }
 .photo-picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .photo-picker:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.spin-dialog { width: min(420px, calc(100% - 24px)); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.spin-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.spin-heading > button { flex-shrink: 0; width: 44px; padding: 0; font-size: 1.6rem; }
+.spin-dialog #spinHelp { font-size: .85rem; line-height: 1.5; }
+.spin-surface { position: relative; display: grid; place-items: center; padding: 32px; }
+#spinBall {
+  position: relative; width: min(240px, 56vw, 42dvh); aspect-ratio: 1; padding: 0;
+  touch-action: none; user-select: none; cursor: crosshair; border: 1px solid #fffbe9; border-radius: 50%;
+  background: radial-gradient(ellipse at 32% 22%, #fff 0 9%, #fffef5 28%, #eee8d9 62%, #b7b3aa 87%, #7b8290);
+  box-shadow: inset -12px -18px 30px #29324b25, inset 6px 8px 18px #fff9, 0 18px 35px #0005;
+}
+#spinBall::before { content: ''; position: absolute; inset: 11%; border: 1px dashed #283b552c; border-radius: 50%; pointer-events: none; }
+#spinBall:focus-visible { outline: 2px solid var(--accent); outline-offset: 7px; }
+.spin-crosshair { position: absolute; inset: 12%; pointer-events: none; }
+.spin-crosshair::before, .spin-crosshair::after { content: ''; position: absolute; background: #263c5222; }
+.spin-crosshair::before { left: 0; right: 0; top: 50%; height: 1px; }
+.spin-crosshair::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+#spinMark { position: absolute; width: 27px; height: 27px; transform: translate(-50%, -50%); border: 4px solid #f03d60; border-radius: 50%; box-shadow: 0 0 0 2px #fffc; pointer-events: none; }
+.spin-direction { position: absolute; color: var(--muted); font-size: .55rem; letter-spacing: .17em; font-weight: 700; }
+.spin-top { top: 4px; }
+.spin-bottom { bottom: 4px; }
+.spin-left { left: -3px; }
+.spin-right { right: -3px; }
+#spinValue { text-align: center; color: var(--accent); font-size: .8rem; min-height: 1.4em; font-variant-numeric: tabular-nums; }
+.spin-dialog .ui-dialog-actions { justify-content: space-between; }
 #scanner:not([hidden]) { display: grid; gap: 8px; }
 #scanVideo { width: 100%; max-height: 240px; object-fit: cover; border-radius: 10px; }
 @media (max-width: 1100px) {

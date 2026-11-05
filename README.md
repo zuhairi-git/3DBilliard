@@ -7,6 +7,11 @@ A static file host alone does not support online games.
 
 ## Play
 
+- On a keyboard, **Left/Right** rotate aim by one degree. Hold **Shift** or use
+  **Up/Down** for one-tenth-degree adjustments. Unlock aim before adjusting;
+  shortcuts pause while a dialog is open, a shot is moving, or you are typing.
+- Click the **Spin** ball to open the contact-point popup. Drag the marker or use
+  arrow keys, choose **Reset spin** to center it, then **Done** to return to play.
 - Choose **Full screen** in the table controls (or the game menu on TV/mobile)
   to hide browser navigation. Choose **Exit full screen** to bring it back.
   Escape or the browser's own exit control also works. Fullscreen availability
