@@ -14,7 +14,7 @@
     <div class="game-heading">
       <strong class="game-brand"><img src="/billiard-logo.svg" width="270" height="64" alt="Billiard · Pool and Snooker"></strong>
       <span id="shotClock" role="timer" aria-label="Online shot time remaining" hidden>30s</span>
-      <small id="status" role="status">Tap or drag on the table to aim.</small>
+      <small id="status" role="status">Tap or drag either side of the cue ball to aim.</small>
     </div>
     <div id="score" aria-label="Players and pocketed balls"></div>
     <button class="ui-button hud-action" id="mobileMenu" type="button" aria-label="Open game menu" aria-expanded="false" aria-haspopup="dialog" aria-controls="mobileGameMenu"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="menu-open-icon" d="M4 6h16M4 12h16M4 18h16"/><path class="menu-close-icon" d="m6 6 12 12M6 18 18 6"/></svg></button>
@@ -72,7 +72,7 @@
       <button class="ui-button" id="tvMenu" type="button">Menu</button>
     </div>
     <div class="call-pocket" id="callPocket" hidden><label for="pocketChoice">Black 8 · Call pocket</label><select class="ui-select" id="pocketChoice"><option value="">Choose on the table…</option><option value="0">Head · left</option><option value="1">Middle · left</option><option value="2">Foot · left</option><option value="3">Head · right</option><option value="4">Middle · right</option><option value="5">Foot · right</option></select></div>
-    <div class="fine-aim"><span class="control-label">Fine aim</span><button id="fineAim" class="ui-button" type="button" aria-label="Fine aim. Drag left or right, or use arrow keys to adjust."><span aria-hidden="true">‹<span class="aim-ruler"></span>›</span></button><small>Slide to adjust</small></div>
+    <div class="fine-aim"><span class="control-label">Aim</span><button id="fineAim" class="ui-button" type="button" aria-label="Aim adjustment. Drag left or right, or use arrow keys to aim around the cue ball."><span aria-hidden="true">‹<span class="aim-ruler"></span>›</span></button><small>Drag either way</small></div>
     <button class="ui-button hud-action" id="lockAim" type="button" aria-pressed="false" title="Lock aim to pull back and shoot on the table"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/><circle cx="12" cy="12" r="2"/></svg><span class="hud-label">Aim lock</span></button>
     <div class="contact">
       <span class="control-label">Spin</span>
@@ -162,7 +162,6 @@
 <script type="module" src="/src/bootstrap.ts"></script>
 </body>
 </html>
-
 
 
 

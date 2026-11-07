@@ -251,60 +251,18 @@ footer.game-hud .contact .control-label { display: block; font-size: .52rem; }
 @media (max-width: 600px) {
   header.game-hud { top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); gap: 6px; }
   header.game-hud > .game-heading { border: 0; background: transparent; box-shadow: none; padding: 3px 4px; }
+  .game-brand { display: none; }
   header.game-hud > #score { border-radius: 14px; padding: 4px; gap: 8px; }
   .game-hud .player-score { min-height: 64px; }
   footer.game-hud { border-radius: 16px; padding: 7px 10px; gap: 7px 8px; bottom: max(8px, env(safe-area-inset-bottom)); }
-  footer.game-hud .fine-aim { gap: 6px; flex: 1 1 auto; min-width: 125px; }
+  footer.game-hud .fine-aim { gap: 6px; flex: 1 1 100%; min-width: 125px; order: 2; }
   footer.game-hud #fineAim { min-height: 38px; border: 0; background: #08162a; }
   footer.game-hud .fine-aim > small { display: none; }
   footer.game-hud .contact { flex: 0 0 40px; }
   footer.game-hud #tip { width: 40px; height: 40px; }
   footer.game-hud #lockAim { min-height: 48px; min-width: 44px; padding: 4px; }
   footer.game-hud #stroke { min-height: 48px; border-radius: 9px; }
-  footer.game-hud .camera-zoom {
-    position: static;
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    width: auto;
-    height: auto;
-    padding: 2px 3px;
-    margin: 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: #08162a;
-    box-shadow: none;
-    transform: none;
-    flex-shrink: 0;
-  }
-  footer.game-hud .camera-zoom .zoom-ruler,
-  footer.game-hud .camera-zoom .zoom-label {
-    display: none;
-  }
-  footer.game-hud .camera-zoom .zoom-button {
-    width: 28px;
-    min-width: 28px;
-    min-height: 32px;
-    height: 32px;
-    font-size: 0.95rem;
-    padding: 0;
-    display: grid;
-    place-items: center;
-    border-radius: 6px;
-    color: #c6e3ff;
-  }
-  footer.game-hud .camera-zoom .zoom-button:hover,
-  footer.game-hud .camera-zoom .zoom-button:active {
-    background: #16304e;
-    color: var(--accent);
-  }
-  footer.game-hud .camera-zoom .zoom-value {
-    width: auto;
-    min-width: 30px;
-    padding: 0 4px;
-    font-size: 0.62rem;
-    font-weight: 700;
-  }
+  .camera-zoom.game-hud { display: none; }
 }
 
 /* TV play keeps the table and a single, readable remote instruction strip. */
