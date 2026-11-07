@@ -194,7 +194,7 @@ function syncTableSurface() {
   if (svg) tvTable = svgRenderer ??= new SvgTable(svgSurface);
   else if (uses2dTable()) tvTable = canvasRenderer ??= new TvTable(tvCanvas);
 }
-function activeTableCanvas() { return uses2dTable() ? tvCanvas : canvas; }
+function activeTableCanvas() { return usesSvgTable() ? svgSurface : uses2dTable() ? tvCanvas : canvas; }
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0.025, 0.045, 0.09, 1);
 const camera = new ArcRotateCamera('camera', -Math.PI / 2, 0.025, 2.5, Vector3.Zero(), scene);
@@ -544,6 +544,8 @@ const cameraZoomEl = document.querySelector<HTMLElement>('.camera-zoom');
 const footerEl = document.querySelector<HTMLElement>('footer')!;
 const controlLayout = document.querySelector<HTMLSelectElement>('#controlLayout')!;
 const controlSide = document.querySelector<HTMLSelectElement>('#controlSide')!;
+const aimDirection = document.querySelector<HTMLSelectElement>('#aimDirection')!;
+let mirrorAimDrag = false;
 try {
   controlLayout.value = localStorage.getItem('billiard-control-layout') === 'vertical' ? 'vertical' : 'horizontal';
 } catch {}
@@ -562,6 +564,14 @@ controlSide.onchange = () => {
   document.body.classList.toggle('vertical-controls-left', controlSide.value === 'left');
   try { localStorage.setItem('billiard-control-side', controlSide.value); } catch {}
   requestAnimationFrame(fitOverheadCamera);
+};
+try {
+  mirrorAimDrag = localStorage.getItem('billiard-aim-drag-direction') === 'mirrored';
+  aimDirection.value = mirrorAimDrag ? 'mirrored' : 'direct';
+} catch {}
+aimDirection.onchange = () => {
+  mirrorAimDrag = aimDirection.value === 'mirrored';
+  try { localStorage.setItem('billiard-aim-drag-direction', mirrorAimDrag ? 'mirrored' : 'direct'); } catch {}
 };
 function syncZoomPlacement() {
   if (!cameraZoomEl || !hudToggle || !footerEl) return;
@@ -874,7 +884,7 @@ pocketGuide.isPickable = false;
 const ballHand = document.querySelector<HTMLElement>('#ballHand')!;
 const cue = MeshBuilder.CreateCylinder('cue', { height: cueLength, diameterTop: 0.011, diameterBottom: 0.027, tessellation: 16 }, scene);
 cue.material = material('cue maple', '#cb9358', 0.26);
-cue.isPickable = false;
+cue.isPickable = true;
 let strike = 0;
 let placement: "break" | "foul" | undefined = "break";
 let shotPower = 0;
@@ -1016,6 +1026,7 @@ let movingCueBall = false;
 let aimPointerCueSide = false;
 let aimLocked = false;
 let lastCueTap = 0;
+let cueAimDrag: { pointerId: number; startX: number; startY: number } | undefined;
 let tableStroke: { x: number; y: number; dx: number; dy: number } | undefined;
 const viewToggle = document.querySelector<HTMLButtonElement>('#viewMode')!;
 const lockButton = document.querySelector<HTMLButtonElement>('#lockAim')!;
@@ -1147,13 +1158,46 @@ function aimAtPointer(event: PointerEvent, starting = false) {
     return;
   }
   const next = new Vector3(hit.x - balls[0].x, 0, hit.z - balls[0].z);
-  if (next.lengthSquared() > radius * radius) aim = (aimPointerCueSide ? next.negate() : next).normalize();
+  if (next.lengthSquared() > radius * radius) {
+    if (aimPointerCueSide) next.negate();
+    if (mirrorAimDrag) next.x = -next.x;
+    aim = next.normalize();
+  }
 }
 
 function tableHit(event: PointerEvent, includeRails = false) {
   const bounds = activeTableCanvas().getBoundingClientRect();
   if (uses2dTable()) return tvTable?.pick(event.clientX - bounds.left, event.clientY - bounds.top, includeRails);
   return scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
+}
+function pointerOnCue(event: PointerEvent, bounds: DOMRect) {
+  if (usesSvgTable()) return event.target instanceof Element && Boolean(event.target.closest('.sv-cue'));
+  if (uses2dTable() || !cue.isVisible) return false;
+  const pointerX = event.clientX - bounds.left;
+  const pointerY = event.clientY - bounds.top;
+  const pickedCue = scene.pick(pointerX, pointerY, mesh => mesh === cue);
+  if (pickedCue?.hit) return true;
+  cue.computeWorldMatrix(true);
+  const axis = Vector3.TransformNormal(Vector3.Up(), cue.getWorldMatrix()).normalize();
+  const start = cue.position.subtract(axis.scale(cueLength / 2));
+  const end = cue.position.add(axis.scale(cueLength / 2));
+  const viewport = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+  const project = (point: Vector3) => Vector3.Project(point, Matrix.Identity(), scene.getTransformMatrix(), viewport);
+  const projectedStart = project(start);
+  const projectedEnd = project(end);
+  const scaleX = bounds.width / engine.getRenderWidth();
+  const scaleY = bounds.height / engine.getRenderHeight();
+  const x1 = projectedStart.x * scaleX;
+  const y1 = projectedStart.y * scaleY;
+  const dx = projectedEnd.x * scaleX - x1;
+  const dy = projectedEnd.y * scaleY - y1;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return false;
+  const relativeX = pointerX - x1;
+  const relativeY = pointerY - y1;
+  const t = Math.max(0, Math.min(1, (relativeX * dx + relativeY * dy) / lengthSquared));
+  const distance = Math.hypot(relativeX - t * dx, relativeY - t * dy);
+  return distance <= (event.pointerType === 'touch' ? 26 : 14);
 }
 function targetBallAtPointer(event: PointerEvent, bounds: DOMRect) {
   if (uses2dTable()) {
@@ -1176,9 +1220,9 @@ function targetBallAtPointer(event: PointerEvent, bounds: DOMRect) {
   const index = ballMeshes.findIndex(mesh => mesh === picked.pickedMesh);
   return index > 0 && !balls[index].pocketed ? index : undefined;
 }
-for (const controlCanvas of [canvas, tvCanvas]) {
+for (const controlCanvas of [canvas, tvCanvas, svgSurface] as HTMLElement[]) {
   controlCanvas.addEventListener('contextmenu', event => event.preventDefault());
-  controlCanvas.addEventListener('pointerdown', event => {
+  controlCanvas.addEventListener('pointerdown', (event: PointerEvent) => {
     if (viewMode || !canControl() || finished || strokePointer !== undefined || aimPointer !== undefined || !event.isPrimary || event.button !== 0 || rolling || strike) return;
     event.preventDefault();
     const bounds = controlCanvas.getBoundingClientRect();
@@ -1195,6 +1239,17 @@ for (const controlCanvas of [canvas, tvCanvas]) {
           return;
         }
       }
+    }
+    if (!aimLocked && pointerOnCue(event, bounds)) {
+      aimPointer = event.pointerId;
+      movingCueBall = false;
+      cueAimDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      controlCanvas.setPointerCapture(event.pointerId);
+      return;
     }
     const hit = tableHit(event);
     const cueTap = hit && Math.hypot(hit.x - balls[0].x, hit.z - balls[0].z) < 2.5 * radius;
@@ -1233,15 +1288,33 @@ for (const controlCanvas of [canvas, tvCanvas]) {
     pull = Math.max(0, Math.min(1, -((event.clientX - tableStroke.x) * tableStroke.dx + (event.clientY - tableStroke.y) * tableStroke.dy) / 110));
     showPull();
   }
-  controlCanvas.addEventListener('pointermove', event => {
+  controlCanvas.addEventListener('pointermove', (event: PointerEvent) => {
     if (aimPointer !== event.pointerId) return;
+    if (cueAimDrag?.pointerId === event.pointerId) {
+      let dx = event.clientX - cueAimDrag.startX;
+      const dy = event.clientY - cueAimDrag.startY;
+      if (mirrorAimDrag) dx = -dx;
+      if (Math.hypot(dx, dy) >= 4) {
+        const bounds = activeTableCanvas().getBoundingClientRect();
+        const landscape = bounds.width > bounds.height;
+        const next = landscape
+          ? new Vector3(dy, 0, dx)
+          : new Vector3(dx, 0, -dy);
+        aim = next.normalize();
+      }
+      return;
+    }
     if (tableStroke) updateTablePull(event);
     else if (aimTargetPointer !== undefined) return;
     else aimAtPointer(event);
   });
-  controlCanvas.addEventListener('pointerup', event => {
+  controlCanvas.addEventListener('pointerup', (event: PointerEvent) => {
     if (aimPointer !== event.pointerId) return;
     aimPointer = undefined;
+    if (cueAimDrag?.pointerId === event.pointerId) {
+      cueAimDrag = undefined;
+      return;
+    }
     if (tableStroke) {
       updateTablePull(event);
       const strength = pull;
@@ -1254,9 +1327,10 @@ for (const controlCanvas of [canvas, tvCanvas]) {
     aimTargetPointer = undefined;
     movingCueBall = false;
   });
-  controlCanvas.addEventListener('lostpointercapture', event => {
+  controlCanvas.addEventListener('lostpointercapture', (event: PointerEvent) => {
     if (aimPointer !== event.pointerId) return;
     aimPointer = undefined;
+    if (cueAimDrag?.pointerId === event.pointerId) cueAimDrag = undefined;
     aimTargetPointer = undefined;
     movingCueBall = false;
     tableStroke = undefined;

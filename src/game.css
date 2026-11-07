@@ -362,7 +362,7 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 .player-avatar svg { display: block; width: 100%; height: 100%; }
 .game-hud .player-name { display: flex; align-items: center; gap: 5px; }
 
-#svgTable { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(ellipse at 50% 40%, #1a2b40, #080f1d 80%); }
+#svgTable { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; pointer-events: auto; background: radial-gradient(ellipse at 50% 40%, #1a2b40, #080f1d 80%); }
 #svgTable[hidden] { display: none; }
 
 .score-ball.svg-ball-badge, .game-hud .score-ball.svg-ball-badge { border: 0; background: none; box-shadow: none; text-shadow: none; }
