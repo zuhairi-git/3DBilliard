@@ -528,13 +528,13 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
     top: 50%;
     right: auto;
     bottom: auto;
-    left: 50%;
-    width: 128px;
+    left: calc(50% + 1px);
+    width: 180px;
     height: 16px;
-    transform: translate(-50%, calc(-50% + 8px)) rotate(-90deg) translateX(var(--cue-pull, 0%));
+    transform: translate(-50%, calc(-50% + 10px)) rotate(-90deg) translateX(var(--cue-pull, 0%));
   }
   .vertical-controls footer.game-hud #stroke .cue-target {
-    top: calc(50% - 63.5px);
+    top: calc(50% - 87.5px);
     right: auto;
     left: 50%;
     transform: translateX(-50%);
