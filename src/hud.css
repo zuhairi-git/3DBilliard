@@ -578,4 +578,4 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
 .game-brand img { display: block; width: 165px; height: auto; max-width: 100%; }
 .menu-brand { display: block; width: 206px; height: auto; max-width: 100%; padding: 8px; border: 1px solid #d9bf8838; border-radius: 9px; background: #101e34; }
 @media (max-width: 600px) { .game-brand img { width: 150px; } }
-@media (max-width: 600px) { .desktop-control-layout, .desktop-control-side { display: none; } }
+@media (max-width: 600px) { .desktop-control-settings { display: none; } }
