@@ -53,7 +53,7 @@ export const maxShotSpeed = 4.3;
 export const maxBallSpeed = 8;
 export const shotSpeed = (power: number) => maxShotSpeed * Math.max(0, Math.min(1, Number.isFinite(power) ? power : 0)) ** 1.35;
 
-type Sound = (kind: 'ball' | 'pocket', strength: number) => void;
+type Sound = (kind: 'ball' | 'rail' | 'pocket', strength: number) => void;
 type Cushion = { ax: number; az: number; bx: number; bz: number; jaw?: boolean };
 // Match the six visible cushions, leaving actual openings at all six pockets.
 export const cushions: Cushion[] = [];
@@ -156,7 +156,7 @@ function clothFriction(ball: Ball, dt: number) {
   }
 }
 
-function cushionContact(ball: Ball, cushion: Cushion) {
+function cushionContact(ball: Ball, cushion: Cushion, sound?: Sound) {
   const dx = cushion.bx - cushion.ax, dz = cushion.bz - cushion.az;
   const t = Math.max(0, Math.min(1, ((ball.x - cushion.ax) * dx + (ball.z - cushion.az) * dz) / (dx * dx + dz * dz)));
   const px = ball.x - cushion.ax - t * dx;
@@ -168,7 +168,9 @@ function cushionContact(ball: Ball, cushion: Cushion) {
   ball.z += nz * (radius - distance);
   const normalSpeed = ball.vx * nx + ball.vz * nz;
   if (normalSpeed >= 0) return;
+  const impactSpeed = -normalSpeed;
   const impulse = -(1 + cushionRestitution) * normalSpeed;
+  sound?.('rail', impactSpeed);
   ball.vx += nx * impulse;
   ball.vz += nz * impulse;
   const tx = -nz, tz = nx;
@@ -223,7 +225,7 @@ function substep(balls: Ball[], dt: number, sound?: Sound) {
       }
     }
     for (const ball of balls) {
-      if (!ball.pocketed) for (const cushion of cushions) cushionContact(ball, cushion);
+      if (!ball.pocketed) for (const cushion of cushions) cushionContact(ball, cushion, sound);
       guardBall(ball);
     }
   }

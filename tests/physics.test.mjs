@@ -60,6 +60,15 @@ test('a cushion rebounds the normal component and loses energy', () => {
   assert.ok(energy([b]) < before);
 });
 
+test('cushion impacts emit rail sounds scaled to the incoming speed', () => {
+  const events = [];
+  const b = ball(width / 2 - radius - 0.015, 0.3, 2, 0);
+  step([b], 1 / 30, (kind, strength) => events.push({ kind, strength }));
+  const rails = events.filter(event => event.kind === 'rail');
+  assert.equal(rails.length, 1);
+  assert.ok(rails[0].strength > 1.5 && rails[0].strength <= 2);
+});
+
 test('each pocket admits a straight shot without an invisible cushion', () => {
   for (const p of pockets) {
     const dx = p.x, dz = p.z;

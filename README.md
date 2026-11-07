@@ -84,3 +84,9 @@ the turn and gives the opponent ball in hand. Practice and computer games have n
 rules, saved-state validation, cue clearance, aiming guides, QR decoding and two-client
 online reconnection. `npm run build` includes TypeScript checking. Visual and touch/camera
 review is manual.
+
+## Audio
+
+Pool impacts use clips from SoundBible's public-domain [Playing Pool recording](https://soundbible.com/2035-Playing-Pool.html),
+trimmed into cue, ball, rail and pocket effects. A synthesized fallback is used if the
+recording cannot be loaded.

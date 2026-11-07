@@ -545,7 +545,7 @@ const footerEl = document.querySelector<HTMLElement>('footer')!;
 const controlLayout = document.querySelector<HTMLSelectElement>('#controlLayout')!;
 const controlSide = document.querySelector<HTMLSelectElement>('#controlSide')!;
 try {
-  controlLayout.value = localStorage.getItem('billiard-control-layout') === 'vertical' ? 'vertical' : 'horizontal';
+  controlLayout.value = localStorage.getItem('billiard-control-layout') === 'horizontal' ? 'horizontal' : 'vertical';
 } catch {}
 try {
   controlSide.value = localStorage.getItem('billiard-control-side') === 'left' ? 'left' : 'right';
@@ -1803,6 +1803,7 @@ engine.runRenderLoop(() => {
     if (!strike) {
       const speed = shotSpeed(shotPower);
       strikeBall(cueBall, aim.x, aim.z, speed, tipX, tipY);
+      sound.queue('cue', speed);
       if (resetSpinAfterShot) setTip(0, 0);
       rolling = true;
       status.textContent = 'Balls in motion';
@@ -1862,6 +1863,7 @@ engine.runRenderLoop(() => {
       if (Math.abs(cameraTarget - camera.beta) < 0.003) cameraTarget = undefined;
     }
   }
+  sound.updateMotion(balls);
   sound.flush();
   updateSession(dt);
   if (uses2dTable()) tvTable?.draw({
