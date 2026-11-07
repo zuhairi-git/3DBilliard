@@ -89,7 +89,7 @@
   </footer>
   <dialog class="ui-dialog" id="playerDetails" aria-labelledby="playerDetailsTitle">
     <div class="dialog-body"><div class="spin-heading"><div class="settings-heading"><span class="eyebrow">PLAYER DETAILS</span><h2 id="playerDetailsTitle"></h2></div><button class="ui-button" id="closePlayerDetails" type="button" aria-label="Close player details" autofocus>×</button></div><p id="playerDetailsSummary"></p><div id="playerDetailsBalls"></div></div>
-    <div class="ui-dialog-actions"><form method="dialog"><button class="ui-button ui-button--primary">Back to game</button></form></div>
+    <div class="ui-dialog-actions"><button class="ui-button" id="openProfileFromDetails" type="button">Profile &amp; Barcode</button><form method="dialog"><button class="ui-button ui-button--primary">Back to game</button></form></div>
   </dialog>
   <dialog class="ui-dialog spin-dialog" id="spinDialog" aria-labelledby="spinTitle" aria-describedby="spinHelp">
     <div class="dialog-body">
@@ -140,12 +140,15 @@
   <label class="profile-name" for="profileName">Your name<input class="ui-select" id="profileName" maxlength="24" autocomplete="nickname"></label>
   <p>Your player ID: <strong id="playerId">Connecting…</strong></p>
   <p id="onlineStatus" role="status"></p>
-  <button class="ui-button ui-button--primary" id="hostOnline" type="button">Accept online invites</button>
-  <div id="invite" hidden>
-    <canvas id="inviteQr" aria-label="Scan this QR code to join the game"></canvas>
-    <a id="inviteLink"></a>
+  <div id="invite">
+    <span class="barcode-heading">Player Barcode · Scan to Join</span>
+    <canvas id="inviteQr" aria-label="Scan this barcode to join the game"></canvas>
+    <a id="inviteLink" target="_blank" rel="noopener"></a>
     <small id="inviteNote"></small>
-    <button class="ui-button" id="copyInvite" type="button">Copy invite</button>
+    <div class="invite-buttons">
+      <button class="ui-button ui-button--primary" id="copyInvite" type="button">Copy invite link</button>
+      <button class="ui-button" id="hostOnline" type="button">Accept online invites</button>
+    </div>
     <small>Choose “Accept online invites” before your opponent scans your code.</small>
   </div>
   <div class="join-row"><label for="opponentId">Opponent’s player ID</label><input class="ui-select" id="opponentId" maxlength="12" autocomplete="off" spellcheck="false" placeholder="12-character ID"><button class="ui-button" id="joinOnline" type="button">Join player</button></div>

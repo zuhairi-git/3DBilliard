@@ -33,7 +33,8 @@ export class OnlineGame {
     try { this.name = localStorage.getItem('billiard-player-name') || 'Player'; this.playerId = localStorage.getItem('billiard-player-id') || ''; } catch {}
     const nameInput = document.querySelector<HTMLInputElement>('#profileName')!;
     nameInput.value = this.name;
-    document.querySelector<HTMLElement>('#playerId')!.textContent = this.playerId || 'Connect to get your ID';
+    document.querySelector<HTMLElement>('#playerId')!.textContent = this.playerId || 'Generating ID…';
+    void this.initPlayerId();
     nameInput.onchange = () => {
       this.name = nameInput.value.trim().slice(0, 24) || 'Player';
       nameInput.value = this.name;
@@ -83,7 +84,45 @@ export class OnlineGame {
 
   open() {
     if (!this.dialog.open) this.dialog.showModal();
+    void this.drawInvite();
     void this.connect().catch(() => {});
+  }
+
+  getSecret(): string {
+    let secret = '';
+    try {
+      secret = localStorage.getItem('billiard-player-secret') ?? '';
+      if (!/^[a-f0-9]{64}$/.test(secret)) {
+        secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+        localStorage.setItem('billiard-player-secret', secret);
+      }
+    } catch {
+      secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return secret;
+  }
+
+  async initPlayerId() {
+    if (this.playerId && /^[A-F0-9]{12}$/.test(this.playerId)) {
+      document.querySelector<HTMLElement>('#playerId')!.textContent = this.playerId;
+      void this.drawInvite();
+      return;
+    }
+    const secret = this.getSecret();
+    try {
+      const data = new TextEncoder().encode(secret);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const id = hashArray.slice(0, 6).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+      this.playerId = id;
+      try { localStorage.setItem('billiard-player-id', id); } catch {}
+      document.querySelector<HTMLElement>('#playerId')!.textContent = id;
+      void this.drawInvite();
+    } catch {
+      this.playerId = secret.slice(0, 12).toUpperCase();
+      document.querySelector<HTMLElement>('#playerId')!.textContent = this.playerId;
+      void this.drawInvite();
+    }
   }
 
   private connect() {
@@ -91,16 +130,7 @@ export class OnlineGame {
     if (this.connection) return this.connection;
     this.message.textContent = 'Connecting…';
     this.connection = new Promise<void>((resolve, reject) => {
-      let secret: string;
-      try {
-        secret = localStorage.getItem('billiard-player-secret') ?? '';
-        if (!/^[a-f0-9]{64}$/.test(secret)) {
-          secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
-          localStorage.setItem('billiard-player-secret', secret);
-        }
-      } catch {
-        secret = Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
-      }
+      const secret = this.getSecret();
       const socket = this.socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/play`);
       const timeout = window.setTimeout(() => socket.close(), 10000);
       socket.onopen = () => this.send({ type: 'register', secret, name: this.name });
@@ -166,23 +196,34 @@ export class OnlineGame {
       if (this.active) { this.message.textContent = 'Leave the current online game before creating another invite.'; return; }
       this.send({ type: 'host' });
       await this.drawInvite();
-    } catch { /* Connection status is shown in the dialog. */ }
+    } catch {
+      await this.drawInvite();
+    }
   }
 
   private async drawInvite() {
     try {
+      if (!this.playerId) return;
       const url = new URL(location.href);
       url.search = '';
       url.searchParams.set('join', this.playerId);
       this.link.href = url.href;
       this.link.textContent = url.href;
-      await QRCode.toCanvas(this.qr, url.href, { width: 200, margin: 2, errorCorrectionLevel: 'M' });
+      await QRCode.toCanvas(this.qr, url.href, {
+        width: 200,
+        margin: 2,
+        errorCorrectionLevel: 'M',
+        color: {
+          dark: '#0a1728',
+          light: '#ffffff',
+        },
+      });
       document.querySelector<HTMLElement>('#invite')!.hidden = false;
       const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
       document.querySelector<HTMLElement>('#inviteNote')!.textContent = loopback
         ? 'For another device, open this game using your computer’s network address first, then create the invite again.'
-        : 'Your opponent can scan this QR code with their phone camera, or open the invite link.';
-    } catch { this.message.textContent = 'Unable to generate the QR code.'; }
+        : 'Your opponent can scan this barcode / QR code with their phone camera, or open the invite link.';
+    } catch { this.message.textContent = 'Unable to generate the barcode / QR code.'; }
   }
 
   private scanned(text: string) {
@@ -260,7 +301,6 @@ export class OnlineGame {
     this.send({ type: 'leave' });
     this.active = false;
     this.seat = undefined;
-    document.querySelector<HTMLElement>('#invite')!.hidden = true;
     this.message.textContent = 'Left the online game.';
     this.onEnded();
   }

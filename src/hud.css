@@ -206,9 +206,9 @@ footer.game-hud .call-pocket { padding-bottom: 6px; border-bottom: 1px solid var
   header.game-hud > nav {
     display: none;
   }
-  .game-hud .hud-action, header.game-hud #openSettings { min-width: 0; min-height: 44px; flex: 1; padding: 4px; gap: 4px; }
-  .hud-action svg { width: 18px; height: 18px; }
-  .hud-label { font-size: .49rem; }
+  header.game-hud > nav .hud-action, header.game-hud #openSettings { min-width: 0; min-height: 44px; flex: 1; padding: 4px; gap: 4px; }
+  header.game-hud > nav .hud-action svg { width: 18px; height: 18px; }
+  header.game-hud > nav .hud-label { font-size: .49rem; }
   footer.game-hud { gap: 8px; padding: 6px 8px; }
   footer.game-hud #lockAim { flex: 0 0 48px; min-width: 48px; min-height: 46px; }
   footer.game-hud .contact { padding-right: 8px; }
@@ -253,16 +253,58 @@ footer.game-hud .contact .control-label { display: block; font-size: .52rem; }
   header.game-hud > .game-heading { border: 0; background: transparent; box-shadow: none; padding: 3px 4px; }
   header.game-hud > #score { border-radius: 14px; padding: 4px; gap: 8px; }
   .game-hud .player-score { min-height: 64px; }
-  footer.game-hud { border-radius: 16px; padding: 9px 10px; gap: 9px; bottom: max(8px, env(safe-area-inset-bottom)); }
-  footer.game-hud .fine-aim { gap: 8px; }
-  footer.game-hud #fineAim { min-height: 44px; border: 0; background: #08162a; }
+  footer.game-hud { border-radius: 16px; padding: 7px 10px; gap: 7px 8px; bottom: max(8px, env(safe-area-inset-bottom)); }
+  footer.game-hud .fine-aim { gap: 6px; flex: 1 1 auto; min-width: 125px; }
+  footer.game-hud #fineAim { min-height: 38px; border: 0; background: #08162a; }
   footer.game-hud .fine-aim > small { display: none; }
-  footer.game-hud .contact { flex: 0 0 44px; }
-  footer.game-hud #lockAim { min-height: 56px; }
-  footer.game-hud #stroke { min-height: 56px; border-radius: 9px; }
-  .camera-zoom.game-hud { top: auto; bottom: calc(var(--shot-controls-height, 140px) + 8px); right: max(8px, env(safe-area-inset-right)); transform: none; display: flex; align-items: center; width: auto; padding: 0 2px; border-radius: 9px; }
-  .camera-zoom .zoom-ruler, .camera-zoom .zoom-label { display: none; }
-  .camera-zoom .zoom-button { width: 44px; min-height: 44px; }
+  footer.game-hud .contact { flex: 0 0 40px; }
+  footer.game-hud #tip { width: 40px; height: 40px; }
+  footer.game-hud #lockAim { min-height: 48px; min-width: 44px; padding: 4px; }
+  footer.game-hud #stroke { min-height: 48px; border-radius: 9px; }
+  footer.game-hud .camera-zoom {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: auto;
+    height: auto;
+    padding: 2px 3px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #08162a;
+    box-shadow: none;
+    transform: none;
+    flex-shrink: 0;
+  }
+  footer.game-hud .camera-zoom .zoom-ruler,
+  footer.game-hud .camera-zoom .zoom-label {
+    display: none;
+  }
+  footer.game-hud .camera-zoom .zoom-button {
+    width: 28px;
+    min-width: 28px;
+    min-height: 32px;
+    height: 32px;
+    font-size: 0.95rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    color: #c6e3ff;
+  }
+  footer.game-hud .camera-zoom .zoom-button:hover,
+  footer.game-hud .camera-zoom .zoom-button:active {
+    background: #16304e;
+    color: var(--accent);
+  }
+  footer.game-hud .camera-zoom .zoom-value {
+    width: auto;
+    min-width: 30px;
+    padding: 0 4px;
+    font-size: 0.62rem;
+    font-weight: 700;
+  }
 }
 
 /* TV play keeps the table and a single, readable remote instruction strip. */
@@ -304,24 +346,53 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
 .snooker-game .game-hud .player-score { grid-template-rows: auto auto; min-height: 46px; }
 .snooker-game .game-hud .player-score.active { border-color: #e8ad8299; box-shadow: inset 0 -2px #e8ad82; }
 @media (max-width: 600px) {
-  footer.game-hud .hud-toggle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; flex: 0 0 44px; min-height: 48px; padding: 3px; font-size: 1rem; }
-  .hud-toggle span { font-size: .55rem; }
+  footer.game-hud .hud-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 0 0 38px;
+    min-width: 38px;
+    min-height: 38px;
+    height: 38px;
+    padding: 2px 3px;
+    font-size: 0.85rem;
+    border-radius: 8px;
+  }
+  .hud-toggle span { font-size: .5rem; line-height: 1; }
   .game-hud .score-ball { width: clamp(12px, 4vw, 18px); height: clamp(12px, 4vw, 18px); }
   .game-hud .potted-balls { gap: 2px; }
-  .compact-hud header.game-hud > .game-heading { display: none; }
+  .compact-hud .game-brand { display: none; }
+  .compact-hud header.game-hud > .game-heading {
+    display: flex;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    min-height: 16px;
+  }
+  .compact-hud header.game-hud #status {
+    font-size: .62rem;
+    color: #a4c1e4;
+    text-align: center;
+    line-height: 1.2;
+  }
   .compact-hud header.game-hud > #score { grid-column: 1; grid-row: 1; border: 0; padding: 0; background: transparent; box-shadow: none; }
   .compact-hud .game-hud .player-score { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; min-height: 44px; padding: 5px 7px; border-radius: 8px; }
   .compact-hud .game-hud :is(.group-marker, .potted-balls) { display: none; }
   .compact-hud footer.game-hud :is(.fine-aim, #lockAim) { display: none; }
   .compact-hud footer.game-hud { padding: 6px 8px; gap: 8px; }
   .compact-hud footer.game-hud #stroke { min-height: 48px; }
-  .compact-hud .camera-zoom.game-hud { display: none; }
 }
 
 @media (max-width: 600px) {
-  .compact-hud header.game-hud:has(#shotClock:not([hidden])) > .game-heading { display: block; grid-column: 1 / -1; grid-row: 2; padding: 0; }
-  .compact-hud header.game-hud:has(#shotClock:not([hidden])) .game-heading > :not(#shotClock) { display: none; }
-  .compact-hud #shotClock:not([hidden]) { width: max-content; margin-inline: auto; }
+  .compact-hud header.game-hud:has(#shotClock:not([hidden])) > .game-heading { display: flex; }
+  .compact-hud #shotClock:not([hidden]) { width: max-content; margin-inline: auto; margin-right: 6px; }
 }
 
 @media (max-width: 600px) {

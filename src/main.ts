@@ -510,6 +510,23 @@ const select = (id: string) => document.querySelector<HTMLSelectElement>('#' + i
 const score = document.querySelector<HTMLElement>('#score')!;
 let snooker = false;
 const hudToggle = document.querySelector<HTMLButtonElement>('#toggleHud')!;
+const cameraZoomEl = document.querySelector<HTMLElement>('.camera-zoom');
+const footerEl = document.querySelector<HTMLElement>('footer')!;
+function syncZoomPlacement() {
+  if (!cameraZoomEl || !hudToggle || !footerEl) return;
+  if (mobileLayout.matches) {
+    if (cameraZoomEl.parentElement !== footerEl) {
+      hudToggle.after(cameraZoomEl);
+    }
+  } else {
+    if (cameraZoomEl.parentElement === footerEl) {
+      footerEl.before(cameraZoomEl);
+    }
+  }
+}
+syncZoomPlacement();
+mobileLayout.addEventListener('change', syncZoomPlacement);
+window.addEventListener('resize', syncZoomPlacement);
 document.body.classList.add('compact-hud');
 hudToggle.onclick = () => {
   const compact = document.body.classList.toggle('compact-hud');
@@ -565,11 +582,19 @@ function legalTargets() {
 const playerDetails = document.querySelector<HTMLDialogElement>('#playerDetails')!;
 let detailsSeat = 0;
 document.getElementById('closePlayerDetails')!.onclick = () => playerDetails.close();
+document.getElementById('openProfileFromDetails')?.addEventListener('click', () => {
+  playerDetails.close();
+  online.open();
+});
 function renderPlayerDetails() {
   document.getElementById('playerDetailsTitle')!.textContent = playerName(detailsSeat);
   const current = finished ? winner === detailsSeat ? 'Winner' : 'Game finished' : turn === detailsSeat ? 'At the table now' : 'Waiting for their turn';
   const group = groups[detailsSeat];
-  document.getElementById('playerDetailsSummary')!.textContent = current + ' · ' + (snooker ? 'Score: ' + scores[detailsSeat] + '. Balls below are shared table totals.' : group ? group + ' group' : 'Open table · Groups unassigned. Showing all object balls.');
+  let summaryText = current + ' · ' + (snooker ? 'Score: ' + scores[detailsSeat] + '. Balls below are shared table totals.' : group ? group + ' group' : 'Open table · Groups unassigned. Showing all object balls.');
+  if (online.playerId && detailsSeat === (online.seat ?? 0)) {
+    summaryText += ' · ID: ' + online.playerId;
+  }
+  document.getElementById('playerDetailsSummary')!.textContent = summaryText;
   const container = document.getElementById('playerDetailsBalls')!;
   container.replaceChildren();
   const indices = balls.flatMap((_, i) => i > 0 && (snooker || !group || groupOf(i) === group) ? [i] : []);
@@ -1349,7 +1374,7 @@ function fitOverheadCamera() {
   const landscape = (uses2dTable() || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
   document.documentElement.style.setProperty('--shot-controls-height', bounds.bottom - footer.top + 'px');
-  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && (!uses2dTable() || usesSvgTable()) ? document.querySelector('.camera-zoom')!.getBoundingClientRect().top : footer.top;
+  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && (!uses2dTable() || usesSvgTable()) ? (cameraZoomEl?.parentElement === footerEl ? footer.top : document.querySelector('.camera-zoom')!.getBoundingClientRect().top) : footer.top;
   const bottom = Math.min(footer.top, zoomTop) - bounds.top - 6;
   if (uses2dTable()) {
     if (tvTable instanceof SvgTable) tvTable.resize(bounds.width, bounds.height, top, bottom, cameraZoom);
