@@ -512,6 +512,17 @@ let snooker = false;
 const hudToggle = document.querySelector<HTMLButtonElement>('#toggleHud')!;
 const cameraZoomEl = document.querySelector<HTMLElement>('.camera-zoom');
 const footerEl = document.querySelector<HTMLElement>('footer')!;
+const controlLayout = document.querySelector<HTMLSelectElement>('#controlLayout')!;
+try {
+  controlLayout.value = localStorage.getItem('billiard-control-layout') === 'vertical' ? 'vertical' : 'horizontal';
+} catch {}
+document.body.classList.toggle('vertical-controls', controlLayout.value === 'vertical');
+controlLayout.onchange = () => {
+  document.body.classList.toggle('vertical-controls', controlLayout.value === 'vertical');
+  try { localStorage.setItem('billiard-control-layout', controlLayout.value); } catch {}
+  updateStrokeDirection();
+  requestAnimationFrame(fitOverheadCamera);
+};
 function syncZoomPlacement() {
   if (!cameraZoomEl || !hudToggle || !footerEl) return;
   if (mobileLayout.matches) {
@@ -789,12 +800,18 @@ autoResetSpin.onclick = () => {
 };
 const stroke = document.querySelector<HTMLButtonElement>("#stroke")!;
 const powerValue = document.querySelector<HTMLOutputElement>("#powerValue")!;
+function updateStrokeDirection() {
+  const vertical = document.body.classList.contains('vertical-controls') && !mobileLayout.matches;
+  stroke.setAttribute('aria-label', vertical ? 'Pull the cue down and release to shoot' : 'Pull the cue left and release to shoot');
+  stroke.setAttribute('title', vertical ? 'Pull down and release to shoot' : 'Pull left and release to shoot');
+}
 function showPull() {
   const percent = Math.round(pull * 100);
   powerValue.value = percent + "%";
   stroke.style.setProperty("--power", percent + "%");
   stroke.style.setProperty("--cue-pull", -percent * 0.58 + "%");
 }
+updateStrokeDirection();
 function setTip(x: number, y: number) {
   const limit = Math.max(1, Math.hypot(x, y) / 0.78);
   tipX = x / limit;
@@ -868,11 +885,12 @@ stroke.onpointerdown = event => {
   if (!event.isPrimary || event.button !== 0 || rolling || strike || !canControl() || finished) return;
   if (strokePointer !== undefined || aimPointer !== undefined) return;
   strokePointer = event.pointerId;
-  strokeStart = event.clientX;
+  strokeStart = document.body.classList.contains('vertical-controls') && !mobileLayout.matches ? event.clientY : event.clientX;
   stroke.setPointerCapture(event.pointerId);
 };
 function updatePull(event: PointerEvent) {
-  pull = Math.min(1, Math.max(0, (strokeStart - event.clientX) / 110));
+  const vertical = document.body.classList.contains('vertical-controls') && !mobileLayout.matches;
+  pull = Math.min(1, Math.max(0, (vertical ? event.clientY - strokeStart : strokeStart - event.clientX) / 110));
   showPull();
 }
 stroke.onpointermove = event => {
@@ -895,15 +913,19 @@ stroke.onlostpointercapture = event => {
 };
 let aimPointer: number | undefined;
 let movingCueBall = false;
+let aimPointerCueSide = false;
 let aimLocked = false;
 let lastCueTap = 0;
 let tableStroke: { x: number; y: number; dx: number; dy: number } | undefined;
 const viewToggle = document.querySelector<HTMLButtonElement>('#viewMode')!;
 const lockButton = document.querySelector<HTMLButtonElement>('#lockAim')!;
 const fineAim = document.querySelector<HTMLButtonElement>('#fineAim')!;
-let fineAimX = 0;
+let fineAimPosition = 0;
 function canFineAim() {
   return canControl() && !finished && !rolling && !strike && !viewMode && !aimLocked && strokePointer === undefined;
+}
+function fineAimCoordinate(event: PointerEvent) {
+  return window.matchMedia('(max-width: 600px)').matches ? event.clientX : event.clientY;
 }
 function adjustFineAim(degrees: number) {
   const angle = Math.atan2(aim.x, aim.z) + degrees * Math.PI / 180;
@@ -913,13 +935,15 @@ fineAim.onpointerdown = event => {
   if (!canFineAim() || aimPointer !== undefined || !event.isPrimary || event.button !== 0) return;
   event.preventDefault();
   aimPointer = event.pointerId;
-  fineAimX = event.clientX;
+  fineAimPosition = fineAimCoordinate(event);
   fineAim.setPointerCapture(event.pointerId);
 };
 fineAim.onpointermove = event => {
   if (!fineAim.hasPointerCapture(event.pointerId) || aimPointer !== event.pointerId) return;
-  if (canFineAim()) adjustFineAim((event.clientX - fineAimX) * 0.08);
-  fineAimX = event.clientX;
+  const position = fineAimCoordinate(event);
+  const direction = window.matchMedia('(max-width: 600px)').matches ? 1 : -1;
+  if (canFineAim()) adjustFineAim((position - fineAimPosition) * direction * 0.08);
+  fineAimPosition = position;
 };
 function endFineAim(event: PointerEvent) {
   if (aimPointer === event.pointerId) aimPointer = undefined;
@@ -1008,6 +1032,8 @@ function aimAtPointer(event: PointerEvent, starting = false) {
   if (!hit) return;
   if (starting) {
     movingCueBall = Boolean(placement) && Math.hypot(hit.x - balls[0].x, hit.z - balls[0].z) <= 2.5 * radius;
+    const pointerDirection = new Vector3(hit.x - balls[0].x, 0, hit.z - balls[0].z);
+    aimPointerCueSide = pointerDirection.lengthSquared() > radius * radius && Vector3.Dot(pointerDirection, aim) < 0;
   }
   if (placement && movingCueBall) {
     if (starting) return;
@@ -1021,7 +1047,7 @@ function aimAtPointer(event: PointerEvent, starting = false) {
     return;
   }
   const next = new Vector3(hit.x - balls[0].x, 0, hit.z - balls[0].z);
-  if (next.lengthSquared() > radius * radius) aim = next.normalize();
+  if (next.lengthSquared() > radius * radius) aim = (aimPointerCueSide ? next.negate() : next).normalize();
 }
 
 function tableHit(event: PointerEvent, includeRails = false) {
@@ -1228,7 +1254,8 @@ function updateCueStyle() {
   stroke.style.setProperty('--cue-shaft', shaft);
   stroke.style.setProperty('--cue-butt', butt);
   stroke.querySelector('.cue-stick')!.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-1260 -14 1265 32" preserveAspectRatio="none">' + cueArtwork(select('cueStyle').value) + '</svg>';
-  stroke.setAttribute('title', select('cueStyle').value + ' · Pull left and release to shoot');
+  const direction = document.body.classList.contains('vertical-controls') && !mobileLayout.matches ? 'down' : 'left';
+  stroke.setAttribute('title', select('cueStyle').value + ' · Pull ' + direction + ' and release to shoot');
 }
 select('cueStyle').onchange = updateCueStyle;
 updateCueStyle();
@@ -1374,8 +1401,9 @@ function fitOverheadCamera() {
   const landscape = (uses2dTable() || !mobile) && bounds.width > bounds.height;
   const top = header.bottom - bounds.top + 6;
   document.documentElement.style.setProperty('--shot-controls-height', bounds.bottom - footer.top + 'px');
-  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && (!uses2dTable() || usesSvgTable()) ? (cameraZoomEl?.parentElement === footerEl ? footer.top : document.querySelector('.camera-zoom')!.getBoundingClientRect().top) : footer.top;
-  const bottom = Math.min(footer.top, zoomTop) - bounds.top - 6;
+  const verticalDock = !mobileLayout.matches && document.body.classList.contains('vertical-controls');
+  const zoomTop = mobileLayout.matches && !document.body.classList.contains('compact-hud') && (!uses2dTable() || usesSvgTable()) ? (cameraZoomEl?.closest('footer') === footerEl ? footer.top : document.querySelector('.camera-zoom')!.getBoundingClientRect().top) : footer.top;
+  const bottom = verticalDock ? bounds.height - 6 : Math.min(footer.top, zoomTop) - bounds.top - 6;
   if (uses2dTable()) {
     if (tvTable instanceof SvgTable) tvTable.resize(bounds.width, bounds.height, top, bottom, cameraZoom);
     else tvTable?.resize(bounds.width, bounds.height, top, bottom);
@@ -1399,6 +1427,7 @@ function fitOverheadCamera() {
 }
 
 function resize() {
+  updateStrokeDirection();
   const scales: Record<string, number> = { Low: 0.65, Medium: 0.85, High: 1, Ultra: 1.5 };
   shadows.getShadowMap()!.renderList = scene.meshes.filter(mesh => mesh.name.startsWith("ball ") || ["cabinet", "leg", "side rail", "end rail"].includes(mesh.name));
   scene.shadowsEnabled = quality.value !== "Low";
@@ -1730,18 +1759,6 @@ function updateSession(dt: number) {
   }
   if (saveElapsed >= 0.5) { saveElapsed = 0; saveGame(); }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

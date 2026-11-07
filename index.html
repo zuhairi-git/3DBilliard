@@ -63,6 +63,7 @@
     <div class="zoom-ruler"><input id="cameraZoom" type="range" min="0.65" max="2.5" step="0.05" value="1" aria-label="Camera magnification" aria-valuetext="1 times zoom"></div>
     <button class="zoom-button" id="zoomOut" type="button" aria-label="Zoom out">−</button>
     <button class="zoom-button zoom-value" id="zoomFit" type="button" aria-label="Reset zoom to fit the table" title="Fit table">1.0×</button>
+    <div class="fine-aim"><span class="control-label">Aim</span><button id="fineAim" class="ui-button" type="button" aria-label="Aim adjustment. Drag up or down, or use arrow keys to aim around the cue ball."><span aria-hidden="true"><span class="aim-before">↑</span><span class="aim-ruler"></span><span class="aim-after">↓</span></span></button><small>Drag to aim</small></div>
   </aside>
   <footer class="game-hud" aria-label="Shot controls">
     <button class="ui-button hud-toggle" id="toggleHud" type="button" aria-expanded="false" aria-controls="score" title="Expand game details">⌃<span>Details</span></button>
@@ -72,7 +73,6 @@
       <button class="ui-button" id="tvMenu" type="button">Menu</button>
     </div>
     <div class="call-pocket" id="callPocket" hidden><label for="pocketChoice">Black 8 · Call pocket</label><select class="ui-select" id="pocketChoice"><option value="">Choose on the table…</option><option value="0">Head · left</option><option value="1">Middle · left</option><option value="2">Foot · left</option><option value="3">Head · right</option><option value="4">Middle · right</option><option value="5">Foot · right</option></select></div>
-    <div class="fine-aim"><span class="control-label">Aim</span><button id="fineAim" class="ui-button" type="button" aria-label="Aim adjustment. Drag left or right, or use arrow keys to aim around the cue ball."><span aria-hidden="true">‹<span class="aim-ruler"></span>›</span></button><small>Drag either way</small></div>
     <button class="ui-button hud-action" id="lockAim" type="button" aria-pressed="false" title="Lock aim to pull back and shoot on the table"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5"/><circle cx="12" cy="12" r="2"/></svg><span class="hud-label">Aim lock</span></button>
     <div class="contact">
       <span class="control-label">Spin</span>
@@ -116,6 +116,8 @@
     <label class="ui-field"><span>Table</span><span class="ui-select-wrap"><select class="ui-select" id="tableStyle"><option>Club Green</option><option selected>Tournament Blue</option><option>Burgundy Lounge</option></select></span></label>
     <label class="ui-field"><span>Theme</span><span class="ui-select-wrap"><select class="ui-select" id="theme"><option value="club">Clubhouse</option><option value="midnight">Midnight</option><option value="ivory">Ivory</option></select></span></label>
     <label class="ui-field"><span>Graphics</span><span class="ui-select-wrap"><select class="ui-select" id="quality"><option>Low</option><option>Medium</option><option selected>High</option><option>Ultra</option></select></span></label>
+    </fieldset><fieldset class="desktop-control-settings"><legend>Controls</legend>
+    <label class="ui-field desktop-control-layout"><span>Shot controls</span><span class="ui-select-wrap"><select class="ui-select" id="controlLayout"><option value="horizontal">Horizontal · Bottom</option><option value="vertical">Vertical · Left</option></select></span></label>
     </fieldset><fieldset><legend>Sound</legend>
       <div class="sound-row"><div><strong>Ball &amp; pocket sounds</strong><small>Soft clicks and pocket drops</small></div><button class="ui-button" id="soundToggle" type="button" aria-pressed="true">Sound on</button></div>
       <label class="volume-row" for="volume"><span>Volume</span><input id="volume" type="range" min="0" max="100" value="45"><output id="volumeLabel" for="volume">45%</output></label>
@@ -162,8 +164,4 @@
 <script type="module" src="/src/bootstrap.ts"></script>
 </body>
 </html>
-
-
-
-
 

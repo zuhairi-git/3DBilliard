@@ -38,7 +38,6 @@ test('TV table fits between HUD surfaces in landscape and portrait', () => {
     assert.ok(view.cy + tableH * view.scale / 2 <= bottom);
   }
 });
-
 test('TV renderer uses only Canvas 2D, caps its buffer, and preserves game state', () => {
   const requests = [];
   const context = new Proxy({}, {

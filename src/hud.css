@@ -251,22 +251,71 @@ footer.game-hud .contact .control-label { display: block; font-size: .52rem; }
 @media (max-width: 600px) {
   header.game-hud { top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); gap: 6px; }
   header.game-hud > .game-heading { border: 0; background: transparent; box-shadow: none; padding: 3px 4px; }
-  .game-brand { display: none; }
+  header.game-hud .game-brand { display: none; }
   header.game-hud > #score { border-radius: 14px; padding: 4px; gap: 8px; }
   .game-hud .player-score { min-height: 64px; }
   footer.game-hud { border-radius: 16px; padding: 7px 10px; gap: 7px 8px; bottom: max(8px, env(safe-area-inset-bottom)); }
-  footer.game-hud .fine-aim { gap: 6px; flex: 1 1 100%; min-width: 125px; order: 2; }
-  footer.game-hud #fineAim { min-height: 38px; border: 0; background: #08162a; }
-  footer.game-hud .fine-aim > small { display: none; }
+  .camera-zoom.game-hud .fine-aim { position: static; top: auto; right: auto; gap: 6px; flex: 1 1 100%; width: 100%; min-width: 125px; order: 2; margin: 0; padding: 0; border: 0; }
+  .camera-zoom.game-hud #fineAim { min-height: 38px; border: 0; background: #08162a; }
+  .camera-zoom.game-hud .fine-aim > small { display: none; }
   footer.game-hud .contact { flex: 0 0 40px; }
   footer.game-hud #tip { width: 40px; height: 40px; }
   footer.game-hud #lockAim { min-height: 48px; min-width: 44px; padding: 4px; }
   footer.game-hud #stroke { min-height: 48px; border-radius: 9px; }
-  .camera-zoom.game-hud { display: none; }
+  .camera-zoom.game-hud {
+    position: static;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    order: 2;
+    flex: 1 1 100%;
+    width: auto;
+    height: 40px;
+    padding: 2px 3px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #08162a;
+    box-shadow: none;
+    transform: none;
+  }
+  .camera-zoom.game-hud .zoom-label { display: block; }
+  .camera-zoom.game-hud .zoom-ruler { display: block; flex: 1; width: auto; height: 32px; }
+  .camera-zoom.game-hud .zoom-ruler::before {
+    inset: 13px 7px;
+    background: repeating-linear-gradient(90deg, var(--muted) 0 1px, transparent 1px 10px);
+  }
+  .camera-zoom.game-hud .zoom-ruler::after {
+    left: 7px;
+    right: 7px;
+    top: 50%;
+    bottom: auto;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+  }
+  .camera-zoom.game-hud .zoom-button { width: 30px; min-height: 32px; height: 32px; font-size: .95rem; }
+  .camera-zoom.game-hud .zoom-value { width: auto; min-width: 34px; font-size: .62rem; }
+  .camera-zoom.game-hud #cameraZoom {
+    writing-mode: horizontal-tb;
+    direction: ltr;
+    width: 100%;
+    height: 100%;
+    padding: 0 5px;
+    cursor: ew-resize;
+  }
+  .camera-zoom.game-hud #cameraZoom::-webkit-slider-runnable-track { width: 100%; height: 2px; background: transparent; }
+  .camera-zoom.game-hud #cameraZoom::-webkit-slider-thumb { width: 5px; height: 20px; margin: -9px 0 0; }
+  .camera-zoom.game-hud #cameraZoom::-moz-range-track { width: 100%; height: 2px; background: transparent; }
+  .camera-zoom.game-hud #cameraZoom::-moz-range-thumb { width: 5px; height: 20px; }
+  .camera-zoom.game-hud .fine-aim { display: none; }
+  body.compact-hud .camera-zoom.game-hud { display: flex; }
+  body.compact-hud .camera-zoom.game-hud > :not(.fine-aim) { display: none; }
+  body.compact-hud .camera-zoom.game-hud .fine-aim { display: flex; }
 }
 
 /* TV play keeps the table and a single, readable remote instruction strip. */
-body.compatibility-table :is(#viewMode, #camera, .camera-zoom) { display: none; }
+body.compatibility-table :is(#viewMode, #camera) { display: none; }
+body.compatibility-table .camera-zoom > :not(.fine-aim) { display: none; }
 body.tv-mode footer.game-hud > :not(#tvControls),
 body.tv-mode .camera-zoom,
 body.tv-mode header.game-hud > #tableActions,
@@ -343,7 +392,7 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
   .compact-hud header.game-hud > #score { grid-column: 1; grid-row: 1; border: 0; padding: 0; background: transparent; box-shadow: none; }
   .compact-hud .game-hud .player-score { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; min-height: 44px; padding: 5px 7px; border-radius: 8px; }
   .compact-hud .game-hud :is(.group-marker, .potted-balls) { display: none; }
-  .compact-hud footer.game-hud :is(.fine-aim, #lockAim) { display: none; }
+  .compact-hud footer.game-hud #lockAim { display: none; }
   .compact-hud footer.game-hud { padding: 6px 8px; gap: 8px; }
   .compact-hud footer.game-hud #stroke { min-height: 48px; }
 }
@@ -378,6 +427,114 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
   .compact-hud .game-hud .player-turn { font-size: 7px; padding: 3px 4px; }
 }
 
+@media (min-width: 601px) {
+  .vertical-controls footer.game-hud {
+    top: 50%;
+    bottom: auto;
+    left: max(8px, env(safe-area-inset-left));
+    right: auto;
+    transform: translateY(-50%);
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 76px;
+    padding: 5px;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    gap: 8px;
+  }
+  .vertical-controls footer.game-hud #lockAim {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 4px 2px;
+    flex-shrink: 0;
+  }
+  .vertical-controls footer.game-hud #lockAim svg { width: 16px; height: 16px; }
+  .vertical-controls footer.game-hud #lockAim .hud-label { font-size: .48rem; }
+  .vertical-controls footer.game-hud .contact {
+    flex-direction: column-reverse;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    gap: 4px;
+    padding: 0 0 6px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .vertical-controls footer.game-hud .power {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(165px, 1fr);
+    width: 100%;
+    gap: 4px;
+  }
+  .vertical-controls footer.game-hud .power-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .vertical-controls footer.game-hud .power-label .control-label {
+    max-width: none;
+    white-space: nowrap;
+    text-align: center;
+    font-size: .48rem;
+    letter-spacing: .06em;
+  }
+  .vertical-controls footer.game-hud #powerValue { text-align: center; }
+  .vertical-controls footer.game-hud #stroke {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
+    gap: 5px;
+    width: 100%;
+    min-height: 174px;
+    padding: 8px 5px;
+    cursor: ns-resize;
+  }
+  .vertical-controls footer.game-hud .cue-track {
+    flex: 1;
+    min-width: 0;
+    width: 36px;
+    height: 150px;
+  }
+  .vertical-controls footer.game-hud #stroke .cue-stick {
+    top: 48%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: 104px;
+    height: 16px;
+    transform: translate(-50%, -50%) rotate(-90deg) translateX(var(--cue-pull, 0%));
+  }
+  .vertical-controls footer.game-hud #stroke .cue-target {
+    top: 2px;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .vertical-controls footer.game-hud .power-track {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    width: 4px;
+    height: 150px;
+    flex: 0 0 4px;
+  }
+  .vertical-controls footer.game-hud .power-track span {
+    width: 100%;
+    height: var(--power, 0%);
+    margin-top: auto;
+  }
+  .vertical-controls footer.game-hud .power-track::after {
+    background: repeating-linear-gradient(to top, transparent 0 calc(5% - 1px), #0b192c calc(5% - 1px) 5%);
+  }
+  .vertical-controls footer.game-hud #strokeHint { display: none; }
+}
+
 /* The active seat uses a restrained warm outline and a plain status label. */
 .game-hud .player-score.active,
 .compact-hud .game-hud .player-score.active {
@@ -398,3 +555,4 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
 .game-brand img { display: block; width: 165px; height: auto; max-width: 100%; }
 .menu-brand { display: block; width: 206px; height: auto; max-width: 100%; padding: 8px; border: 1px solid #d9bf8838; border-radius: 9px; background: #101e34; }
 @media (max-width: 600px) { .game-brand img { width: 150px; } }
+@media (max-width: 600px) { .desktop-control-settings { display: none; } }

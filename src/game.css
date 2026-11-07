@@ -27,13 +27,16 @@ main, .game-hud, #ballHand {
 }
 #ballHand:not([hidden]) { position: fixed; z-index: 1; width: 30px; height: 34px; transform: translate(-50%, -90%); pointer-events: none; filter: drop-shadow(0 2px 2px #0009); }
 #ballHand svg { width: 100%; height: 100%; fill: #fff4d9; stroke: #463820; stroke-width: 1.5; stroke-linejoin: round; }
-.fine-aim { display: none; }
-@media (pointer: coarse), (max-width: 600px) {
-  .fine-aim { display: flex; flex: 1 1 100%; align-items: center; gap: 10px; }
-  .fine-aim > small { font-size: .6rem; }
-  #fineAim { flex: 1; min-width: 0; min-height: 44px; touch-action: none; cursor: ew-resize; }
-  #fineAim > span { display: flex; align-items: center; gap: 10px; pointer-events: none; }
-  .aim-ruler { flex: 1; height: 16px; background: repeating-linear-gradient(90deg, transparent 0 9px, var(--accent) 9px 10px); mask-image: linear-gradient(90deg, transparent, #000 25% 75%, transparent); }
+.fine-aim { display: grid; justify-items: center; gap: 6px; }
+.fine-aim > small { font-size: .6rem; }
+#fineAim { width: 44px; height: min(120px, 20dvh); min-width: 0; padding: 4px; touch-action: none; cursor: ns-resize; }
+#fineAim > span { display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; pointer-events: none; }
+.aim-ruler { flex: 1; width: 16px; background: repeating-linear-gradient(180deg, transparent 0 9px, var(--accent) 9px 10px); mask-image: linear-gradient(180deg, transparent, #000 25% 75%, transparent); }
+@media (max-width: 600px) {
+  .fine-aim { display: flex; flex: 1 1 100%; align-items: center; gap: 6px; }
+  #fineAim { flex: 1; width: auto; height: auto; min-height: 44px; cursor: ew-resize; }
+  #fineAim > span { flex-direction: row; gap: 10px; }
+  .aim-ruler { flex: 1; width: auto; height: 16px; background: repeating-linear-gradient(90deg, transparent 0 9px, var(--accent) 9px 10px); mask-image: linear-gradient(90deg, transparent, #000 25% 75%, transparent); }
 }
 .fullscreen-notice:not([hidden]) { position: fixed; z-index: 30; top: 16px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); margin: 0; padding: 14px 20px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); color: var(--text); text-align: center; box-shadow: 0 8px 28px #00000050; }
 .ui-dialog.tv-detection { width: min(720px, calc(100% - 48px)); }
@@ -97,6 +100,7 @@ dialog.dialog-fallback[open] { position: fixed; z-index: 20; top: 6vh; left: 0; 
 .zoom-button:focus-visible, #cameraZoom:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .zoom-value { font: 600 .65rem system-ui, sans-serif; color: var(--accent); font-variant-numeric: tabular-nums; }
 .zoom-ruler { position: relative; height: min(170px, 25dvh); width: 44px; }
+.camera-zoom .fine-aim { position: absolute; top: calc(100% + 8px); right: 0; width: 46px; margin: 0; padding-top: 8px; border-top: 1px solid var(--border); }
 .zoom-ruler::before { content: ''; position: absolute; inset: 7px 13px; pointer-events: none; background: repeating-linear-gradient(to bottom, var(--muted) 0 1px, transparent 1px 10px); opacity: .5; }
 .zoom-ruler::after { content: ''; position: absolute; left: 50%; top: 7px; bottom: 7px; border-left: 1px solid var(--border); pointer-events: none; }
 #cameraZoom { position: relative; z-index: 1; appearance: none; writing-mode: vertical-lr; direction: rtl; width: 44px; height: 100%; margin: 0; padding: 5px 0; background: transparent; cursor: ns-resize; touch-action: none; }
