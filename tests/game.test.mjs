@@ -55,7 +55,11 @@ test('corrupt saves and unbounded network states are rejected', () => {
   for (const bad of [null, {}, {version: 1}, {version: 1, balls: [{x: Infinity}]}]) assert.equal(validGame(bad), false);
 });
 
-const { traceShot } = await loadSource('aim-guide');
+const { directionToBall, traceShot } = await loadSource('aim-guide');
+test('aim direction points from the cue ball to the selected object ball', () => {
+  assert.deepEqual(directionToBall({ x: 1, z: 2 }, { x: 4, z: 6 }), { x: 0.6, z: 0.8 });
+  assert.equal(directionToBall({ x: 1, z: 2 }, { x: 1, z: 2 }), undefined);
+});
 test('object-ball guide reaches an aligned pocket and stops at an intervening ball', () => {
   const make = (x,z) => ({x,z,vx:0,vz:0,spinX:0,spinZ:0,sideSpin:0,pocketed:false});
   const balls = [make(0,0), make(0.25,0)];

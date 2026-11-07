@@ -1,5 +1,10 @@
 import { cushions, pockets, radius, type Ball } from './physics';
 type Point = { x: number; z: number };
+export function directionToBall(cue: Point, target: Point) {
+  const x = target.x - cue.x, z = target.z - cue.z;
+  const magnitude = Math.hypot(x, z);
+  return magnitude > 1e-10 ? { x: x / magnitude, z: z / magnitude } : undefined;
+}
 function circle(origin: Point, dx: number, dz: number, center: Point, r: number) {
   const x = center.x - origin.x, z = center.z - origin.z;
   const along = x * dx + z * dz;

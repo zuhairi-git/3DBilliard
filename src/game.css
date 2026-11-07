@@ -347,6 +347,20 @@ header:has(#shotClock:not([hidden])) #status { grid-column: 2; }
 .player-detail-tray .score-ball { width: 30px; height: 30px; margin: 0; font-size: 11px; }
 .player-detail-tray .ball-number { display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #fff8e9; color: #182337; text-shadow: none; }
 #playerDetailsSummary, #playerDetailsBalls > p { font-size: .8rem; line-height: 1.5; }
+.offline-player-name { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; color: var(--muted); font-size: .8rem; }
+.offline-player-name input { min-width: 0; }
+.offline-avatar-picker { min-width: 0; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.offline-avatar-picker legend { padding-inline: 5px; color: var(--muted); font-size: .75rem; }
+.offline-avatar-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.avatar-choice-group { display: grid; gap: 5px; color: var(--muted); font-size: .7rem; }
+.avatar-choice-buttons { display: flex; flex-wrap: wrap; gap: 5px; }
+.avatar-choice { display: grid; place-items: center; width: 42px; height: 42px; padding: 3px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); cursor: pointer; }
+.avatar-choice svg { display: block; width: 34px; height: 34px; }
+.avatar-choice[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent); }
+.avatar-choice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.player-avatar { display: inline-flex; width: 19px; height: 19px; flex: 0 0 19px; border-radius: 50%; overflow: hidden; vertical-align: middle; }
+.player-avatar svg { display: block; width: 100%; height: 100%; }
+.game-hud .player-name { display: flex; align-items: center; gap: 5px; }
 
 #svgTable { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; background: radial-gradient(ellipse at 50% 40%, #1a2b40, #080f1d 80%); }
 #svgTable[hidden] { display: none; }

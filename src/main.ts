@@ -7,7 +7,7 @@ import { TvTable } from './tv-table';
 import { dismissDialog } from './tv-dialogs';
 import { installFullscreenControl } from './fullscreen';
 import { cueLength, cuePose } from './cue-geometry';
-import { traceShot } from './aim-guide';
+import { directionToBall, traceShot } from './aim-guide';
 import { OnlineGame } from './online';
 import { groupOf, poolTargets, resolvePoolShot, type Groups } from './pool-rules';
 import { validGame, type SavedGame } from './saved-game';
@@ -374,7 +374,7 @@ for (const pocket of pockets) {
     }));
     const mesh = MeshBuilder.CreateRibbon(name, { pathArray: paths, sideOrientation: 2 }, scene);
     mesh.material = finish;
-    mesh.isPickable = false;
+    mesh.isPickable = true;
   };
   // A rail-height surround joins the neighbouring rails around a true opening.
   const inner: Vector3[] = [], outer: Vector3[] = [];
@@ -508,6 +508,36 @@ const contacts = ballMeshes.map(() => {
 const settings = document.querySelector<HTMLDialogElement>('#settings')!;
 const select = (id: string) => document.querySelector<HTMLSelectElement>('#' + id)!;
 const score = document.querySelector<HTMLElement>('#score')!;
+const offlinePlayerTwoNameInput = document.querySelector<HTMLInputElement>('#offlinePlayerTwoName')!;
+const offlinePlayerTwoNameRow = document.querySelector<HTMLElement>('#offlinePlayerTwoNameRow')!;
+const offlinePlayerNameInput = document.querySelector<HTMLInputElement>('#offlinePlayerName')!;
+const offlinePlayerNameRow = document.querySelector<HTMLElement>('#offlinePlayerNameRow')!;
+const offlineAvatarPicker = document.querySelector<HTMLElement>('#offlineAvatarPicker')!;
+const offlineAvatarOptions = document.querySelector<HTMLElement>('#offlineAvatarOptions')!;
+let offlinePlayerOneName = '';
+let offlinePlayerTwoName = 'Player 2';
+const avatarOptions = [
+  { id: 'man-classic', label: 'Male · Classic', group: 'Male', background: '#8ad6e6', skin: '#f2c6a0', hair: '#26334a', shirt: '#315b8e', hairShape: 'M10 19C7 8 14 3 21 4c8 1 11 8 8 16l-4-4c-4 0-7-2-9-5-1 4-3 6-6 8Z', fringe: 'M10 13c4-1 6-4 7-7 2 4 5 6 10 6l1 5c-5-1-8-3-10-6-2 3-4 4-8 5Z', beard: '' },
+  { id: 'man-curly', label: 'Male · Curls', group: 'Male', background: '#b7a2ef', skin: '#bb7959', hair: '#182333', shirt: '#397b78', hairShape: 'M9 19C5 12 8 4 13 6c1-5 7-5 9-2 5-2 9 3 7 8 3 3 1 8-2 9l-2-7c-5 1-8-1-10-4-1 4-3 6-6 9Z', fringe: 'M10 14c2-5 5-5 6-9 2 4 5 5 10 4l2 7c-4-1-7-3-9-6-2 3-5 4-8 4Z', beard: 'M12 24c4 3 8 3 12 0l-2 5h-8Z' },
+  { id: 'man-beard', label: 'Male · Beard', group: 'Male', background: '#f3bd83', skin: '#e5b18c', hair: '#51372f', shirt: '#8a4c55', hairShape: 'M10 19C7 9 12 4 20 4c8 0 11 8 8 16l-4-4c-5 0-8-2-10-5-1 4-2 6-4 8Z', fringe: 'M10 14c4-1 6-4 7-7 2 4 5 6 10 6l1 5c-5-1-8-3-10-6-2 3-4 4-8 5Z', beard: 'M11 22c2 4 5 7 9 7s7-3 9-7l-2 8-7 5-7-5Z' },
+  { id: 'woman-waves', label: 'Female · Waves', group: 'Female', background: '#f3a5bb', skin: '#edc2a5', hair: '#48304d', shirt: '#a54f83', hairShape: 'M8 24C3 11 8 3 19 3c12 0 17 12 12 23l-4 5-1-16c-4 0-8-2-10-5-2 5-4 8-8 9Z', fringe: 'M9 14c4-1 6-5 7-9 2 4 6 6 11 6l1 7c-5-1-9-3-11-7-2 4-4 5-8 6Z', beard: '' },
+  { id: 'woman-bob', label: 'Female · Bob', group: 'Female', background: '#84c8b7', skin: '#bc8062', hair: '#202a42', shirt: '#396a85', hairShape: 'M8 22C5 8 11 3 20 3s15 7 12 20l-4 7-2-14c-5 0-9-2-11-5-1 5-3 8-6 10Z', fringe: 'M9 13c4 0 7-3 8-7 2 4 5 6 11 6l1 7c-5 0-9-3-11-6-2 3-4 4-8 5Z', beard: '' },
+  { id: 'woman-curls', label: 'Female · Curls', group: 'Female', background: '#e5a56e', skin: '#80503e', hair: '#211c2c', shirt: '#54734f', hairShape: 'M8 25C3 15 5 5 12 6c1-5 7-5 9-2 6-3 12 3 9 9 5 4 2 12-2 15l-1-14c-5 1-8-1-10-5-2 5-4 8-8 9Z', fringe: 'M9 14c2-5 5-5 6-9 2 4 5 5 10 4l2 8c-5-1-8-3-10-6-2 3-4 4-8 5Z', beard: '' },
+] as const;
+let offlinePlayerAvatars: [string, string] = ['man-classic', 'woman-waves'];
+try {
+  offlinePlayerOneName = localStorage.getItem('billiard-player-one-name')?.trim().slice(0, 24) || '';
+  offlinePlayerTwoName = localStorage.getItem('billiard-player-two-name')?.trim().slice(0, 24) || offlinePlayerTwoName;
+  for (const seat of [0, 1]) {
+    const saved = localStorage.getItem('billiard-player-' + (seat + 1) + '-avatar');
+    if (avatarOptions.some(option => option.id === saved)) offlinePlayerAvatars[seat] = saved!;
+  }
+} catch {}
+offlinePlayerTwoNameInput.value = offlinePlayerTwoName;
+function syncOfflinePlayerNameVisibility() {
+  offlinePlayerTwoNameRow.hidden = select('opponent').value === 'computer';
+}
+select('opponent').onchange = syncOfflinePlayerNameVisibility;
 let snooker = false;
 const hudToggle = document.querySelector<HTMLButtonElement>('#toggleHud')!;
 const cameraZoomEl = document.querySelector<HTMLElement>('.camera-zoom');
@@ -577,7 +607,11 @@ function canControl() {
   return onlineMode ? online.active && turn === online.seat && online.remainingMs() > 0 : !versusComputer || turn === 0;
 }
 function playerName(seat: number) {
-  return onlineMode ? seat === online.seat ? online.name : online.peerName : seat === 0 ? online.name : versusComputer ? 'Computer' : 'Player 2';
+  return onlineMode ? seat === online.seat ? online.name : online.peerName : seat === 0 ? offlinePlayerOneName || online.name : versusComputer ? 'Computer' : offlinePlayerTwoName;
+}
+function avatarMarkup(id: string) {
+  const avatar = avatarOptions.find(option => option.id === id) ?? avatarOptions[0];
+  return `<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="20" r="20" fill="${avatar.background}"/><path d="${avatar.hairShape}" fill="${avatar.hair}"/><rect x="17" y="23" width="6" height="9" rx="3" fill="${avatar.skin}"/><ellipse cx="20" cy="17" rx="8.5" ry="10" fill="${avatar.skin}"/><path d="${avatar.fringe}" fill="${avatar.hair}"/><path d="${avatar.beard}" fill="${avatar.hair}"/><path d="M16 17h1m6 0h1" stroke="#293142" stroke-width="1.5" stroke-linecap="round"/><path d="M18 22q2 1.5 4 0" fill="none" stroke="#a75450" stroke-width="1.2" stroke-linecap="round"/><path d="M6 40c1-7 5-10 11-11l3 3 3-3c6 1 10 4 11 11Z" fill="${avatar.shirt}"/></svg>`;
 }
 const colourNames = ['yellow', 'green', 'brown', 'blue', 'pink', 'black'];
 
@@ -599,6 +633,35 @@ document.getElementById('openProfileFromDetails')?.addEventListener('click', () 
 });
 function renderPlayerDetails() {
   document.getElementById('playerDetailsTitle')!.textContent = playerName(detailsSeat);
+  offlinePlayerNameRow.hidden = onlineMode;
+  offlineAvatarPicker.hidden = onlineMode;
+  offlinePlayerNameInput.value = playerName(detailsSeat);
+  offlineAvatarOptions.replaceChildren();
+  for (const group of ['Male', 'Female']) {
+    const category = document.createElement('div');
+    category.className = 'avatar-choice-group';
+    const label = document.createElement('span');
+    label.textContent = group;
+    const choices = document.createElement('div');
+    choices.className = 'avatar-choice-buttons';
+    for (const avatar of avatarOptions.filter(option => option.group === group)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'avatar-choice';
+      button.setAttribute('aria-label', avatar.label);
+      button.setAttribute('aria-pressed', String(offlinePlayerAvatars[detailsSeat] === avatar.id));
+      button.title = avatar.label;
+      button.innerHTML = avatarMarkup(avatar.id);
+      button.onclick = () => {
+        offlinePlayerAvatars[detailsSeat] = avatar.id;
+        try { localStorage.setItem('billiard-player-' + (detailsSeat + 1) + '-avatar', avatar.id); } catch {}
+        showScore();
+      };
+      choices.append(button);
+    }
+    category.append(label, choices);
+    offlineAvatarOptions.append(category);
+  }
   const current = finished ? winner === detailsSeat ? 'Winner' : 'Game finished' : turn === detailsSeat ? 'At the table now' : 'Waiting for their turn';
   const group = groups[detailsSeat];
   let summaryText = current + ' · ' + (snooker ? 'Score: ' + scores[detailsSeat] + '. Balls below are shared table totals.' : group ? group + ' group' : 'Open table · Groups unassigned. Showing all object balls.');
@@ -653,7 +716,13 @@ function showScore() {
     const left = balls.filter((ball, index) => !ball.pocketed && groupOf(index) === groups[seat]).length;
     const name = document.createElement('strong');
     name.className = 'player-name';
-    name.textContent = playerName(seat);
+    if (!onlineMode) {
+      const avatar = document.createElement('span');
+      avatar.className = 'player-avatar';
+      avatar.innerHTML = avatarMarkup(offlinePlayerAvatars[seat]);
+      name.append(avatar);
+    }
+    name.append(document.createTextNode(playerName(seat)));
     const detail = document.createElement('span');
     detail.className = 'player-group';
     detail.textContent = snooker ? 'Score · ' + scores[seat] : groups[seat] ? groups[seat] + ' · ' + left + ' left' : 'Open table';
@@ -684,6 +753,26 @@ function showScore() {
     return item;
   }));
 }
+offlinePlayerTwoNameInput.onchange = () => {
+  offlinePlayerTwoName = offlinePlayerTwoNameInput.value.trim().slice(0, 24) || 'Player 2';
+  offlinePlayerTwoNameInput.value = offlinePlayerTwoName;
+  try { localStorage.setItem('billiard-player-two-name', offlinePlayerTwoName); } catch {}
+  showScore();
+};
+offlinePlayerNameInput.onchange = () => {
+  if (onlineMode) return;
+  const name = offlinePlayerNameInput.value.trim().slice(0, 24) || (detailsSeat === 0 ? online.name : versusComputer ? 'Computer' : 'Player 2');
+  if (detailsSeat === 0) {
+    offlinePlayerOneName = name === online.name ? '' : name;
+    try { localStorage.setItem('billiard-player-one-name', offlinePlayerOneName); } catch {}
+  } else {
+    offlinePlayerTwoName = name;
+    offlinePlayerTwoNameInput.value = name;
+    try { localStorage.setItem('billiard-player-two-name', name); } catch {}
+  }
+  offlinePlayerNameInput.value = name;
+  showScore();
+};
 
 function respot(index: number) {
   const spot = rack(snooker)[index];
@@ -912,6 +1001,7 @@ stroke.onlostpointercapture = event => {
   if (strokePointer === event.pointerId) clearStroke();
 };
 let aimPointer: number | undefined;
+let aimTargetPointer: number | undefined;
 let movingCueBall = false;
 let aimPointerCueSide = false;
 let aimLocked = false;
@@ -1055,6 +1145,27 @@ function tableHit(event: PointerEvent, includeRails = false) {
   if (uses2dTable()) return tvTable?.pick(event.clientX - bounds.left, event.clientY - bounds.top, includeRails);
   return scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => mesh === bed)?.pickedPoint;
 }
+function targetBallAtPointer(event: PointerEvent, bounds: DOMRect) {
+  if (uses2dTable()) {
+    const hit = tableHit(event);
+    if (!hit) return undefined;
+    let nearest: number | undefined;
+    let nearestDistance = (radius * 1.5) ** 2;
+    for (let index = 1; index < balls.length; index++) {
+      if (balls[index].pocketed) continue;
+      const distance = (balls[index].x - hit.x) ** 2 + (balls[index].z - hit.z) ** 2;
+      if (distance <= nearestDistance) {
+        nearest = index;
+        nearestDistance = distance;
+      }
+    }
+    return nearest;
+  }
+  const picked = scene.pick(event.clientX - bounds.left, event.clientY - bounds.top, mesh => ballMeshes.some(ballMesh => ballMesh === mesh));
+  if (!picked?.hit || !picked.pickedMesh) return undefined;
+  const index = ballMeshes.findIndex(mesh => mesh === picked.pickedMesh);
+  return index > 0 && !balls[index].pocketed ? index : undefined;
+}
 for (const controlCanvas of [canvas, tvCanvas]) {
   controlCanvas.addEventListener('contextmenu', event => event.preventDefault());
   controlCanvas.addEventListener('pointerdown', event => {
@@ -1096,6 +1207,15 @@ for (const controlCanvas of [canvas, tvCanvas]) {
       tableStroke = { x: event.clientX, y: event.clientY, dx: dx / magnitude, dy: dy / magnitude };
       return;
     }
+    const target = targetBallAtPointer(event, bounds);
+    if (target !== undefined) {
+      const direction = directionToBall(balls[0], balls[target]);
+      if (direction) {
+        aim.set(direction.x, 0, direction.z);
+        aimTargetPointer = target;
+        return;
+      }
+    }
     aimAtPointer(event, true);
   });
   function updateTablePull(event: PointerEvent) {
@@ -1106,6 +1226,7 @@ for (const controlCanvas of [canvas, tvCanvas]) {
   controlCanvas.addEventListener('pointermove', event => {
     if (aimPointer !== event.pointerId) return;
     if (tableStroke) updateTablePull(event);
+    else if (aimTargetPointer !== undefined) return;
     else aimAtPointer(event);
   });
   controlCanvas.addEventListener('pointerup', event => {
@@ -1119,12 +1240,14 @@ for (const controlCanvas of [canvas, tvCanvas]) {
       if (strength >= 0.08) fire(strength);
       return;
     }
-    aimAtPointer(event);
+    if (aimTargetPointer === undefined) aimAtPointer(event);
+    aimTargetPointer = undefined;
     movingCueBall = false;
   });
   controlCanvas.addEventListener('lostpointercapture', event => {
     if (aimPointer !== event.pointerId) return;
     aimPointer = undefined;
+    aimTargetPointer = undefined;
     movingCueBall = false;
     tableStroke = undefined;
     clearStroke();
@@ -1168,6 +1291,7 @@ function resetMatch() {
   showScore();
   placement = "break";
   aimPointer = undefined;
+  aimTargetPointer = undefined;
   movingCueBall = false;
   if (viewMode) viewToggle.click();
   aim = Vector3.Forward();
@@ -1229,6 +1353,8 @@ document.querySelector<HTMLButtonElement>('#noticeRematch')!.onclick = () => {
 document.querySelector<HTMLButtonElement>('#openSettings')!.onclick = () => {
   select('game').value = snooker ? 'snooker' : 'pool';
   select('opponent').value = versusComputer ? 'computer' : 'solo';
+  offlinePlayerTwoNameInput.value = offlinePlayerTwoName;
+  syncOfflinePlayerNameVisibility();
   settings.showModal();
 };
 settings.addEventListener('close', () => {
@@ -1759,10 +1885,4 @@ function updateSession(dt: number) {
   }
   if (saveElapsed >= 0.5) { saveElapsed = 0; saveGame(); }
 }
-
-
-
-
-
-
 
