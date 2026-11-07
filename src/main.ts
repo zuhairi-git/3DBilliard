@@ -543,14 +543,24 @@ const hudToggle = document.querySelector<HTMLButtonElement>('#toggleHud')!;
 const cameraZoomEl = document.querySelector<HTMLElement>('.camera-zoom');
 const footerEl = document.querySelector<HTMLElement>('footer')!;
 const controlLayout = document.querySelector<HTMLSelectElement>('#controlLayout')!;
+const controlSide = document.querySelector<HTMLSelectElement>('#controlSide')!;
 try {
   controlLayout.value = localStorage.getItem('billiard-control-layout') === 'vertical' ? 'vertical' : 'horizontal';
 } catch {}
+try {
+  controlSide.value = localStorage.getItem('billiard-control-side') === 'left' ? 'left' : 'right';
+} catch {}
 document.body.classList.toggle('vertical-controls', controlLayout.value === 'vertical');
+document.body.classList.toggle('vertical-controls-left', controlSide.value === 'left');
 controlLayout.onchange = () => {
   document.body.classList.toggle('vertical-controls', controlLayout.value === 'vertical');
   try { localStorage.setItem('billiard-control-layout', controlLayout.value); } catch {}
   updateStrokeDirection();
+  requestAnimationFrame(fitOverheadCamera);
+};
+controlSide.onchange = () => {
+  document.body.classList.toggle('vertical-controls-left', controlSide.value === 'left');
+  try { localStorage.setItem('billiard-control-side', controlSide.value); } catch {}
   requestAnimationFrame(fitOverheadCamera);
 };
 function syncZoomPlacement() {
@@ -1885,4 +1895,3 @@ function updateSession(dt: number) {
   }
   if (saveElapsed >= 0.5) { saveElapsed = 0; saveGame(); }
 }
-

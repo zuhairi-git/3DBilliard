@@ -458,6 +458,14 @@ body.tv-mode .game-hud #status { font-size: .9rem; }
     padding-top: 8px;
     border-top: 1px solid var(--border);
   }
+  .vertical-controls.vertical-controls-left footer.game-hud {
+    left: max(8px, env(safe-area-inset-left));
+    right: auto;
+  }
+  .vertical-controls.vertical-controls-left .camera-zoom.game-hud {
+    left: auto;
+    right: max(8px, env(safe-area-inset-right));
+  }
   .vertical-controls footer.game-hud #lockAim {
     width: 100%;
     min-width: 0;
